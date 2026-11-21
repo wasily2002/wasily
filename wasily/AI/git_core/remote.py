@@ -93,6 +93,32 @@ def remotes(handle: RepoHandle) -> dict[str, Any]:
     return {"ok": True, "remotes": out}
 
 
+def add_remote(handle: RepoHandle, name: str, url: str) -> dict[str, Any]:
+    """新增远端；地址里的内嵌凭据和空名字都拒绝，避免写进 .git/config。"""
+    target = guard_url(url)
+    remote_name = (name or "").strip()
+    if not remote_name:
+        raise GitError("bad_remote", "远端名称不能为空")
+    with handle.lock:
+        try:
+            dulwich.porcelain.remote_add(handle.repo, remote_name, target)
+        except Exception as exc:  # noqa: BLE001
+            raise GitError("remote_add_failed", "添加远端失败: %s" % exc) from exc
+    return {"ok": True, "name": remote_name, "url": target}
+
+
+def remove_remote(handle: RepoHandle, name: str) -> dict[str, Any]:
+    remote_name = (name or "").strip()
+    if not remote_name:
+        raise GitError("bad_remote", "远端名称不能为空")
+    with handle.lock:
+        try:
+            dulwich.porcelain.remote_remove(handle.repo, remote_name)
+        except Exception as exc:  # noqa: BLE001
+            raise GitError("remote_remove_failed", "移除远端失败: %s" % exc) from exc
+    return {"ok": True, "name": remote_name}
+
+
 def fetch(handle: RepoHandle, remote: str = "origin", prune: bool = False,
           username: str = "", password: str = "") -> dict[str, Any]:
     with lock_for("remote:" + handle.id):
@@ -135,13 +161,22 @@ def pull(handle: RepoHandle, remote: str = "origin", branch: str = "",
 
 def push(handle: RepoHandle, branch: str = "", remote: str = "origin",
          set_upstream: bool = True, username: str = "",
-         password: str = "") -> dict[str, Any]:
-    """只推明确的那一个分支，禁止 force；推送后回读远端 ref 做对账。"""
+         password: str = "", source: str = "") -> dict[str, Any]:
+    """只推明确的那一个分支，禁止 force；推送后回读远端 ref 做对账。
+
+    source 与 branch 不同时用于「隔离分支 → 交付分支」：
+    验证提交发生在 wasily/<id>，但只允许非快进地推到目标分支。
+    """
     target = branch or current_branch(handle)
     if not target:
         raise GitError("detached_head", "当前不在分支上，无法推送")
-    local = head_sha(handle.repo)
-    refspec = "refs/heads/%s:refs/heads/%s" % (target, target)
+    src = source or target
+    try:
+        # 松散 ref 在不同后端可能返回 20 字节或 40 位十六进制，统一归一化。
+        local_hex = _sha_hex(handle.repo.refs[b"refs/heads/" + src.encode("utf-8")])
+    except KeyError as exc:
+        raise GitError("unknown_branch", "要推送的分支不存在: %s" % src) from exc
+    refspec = "refs/heads/%s:refs/heads/%s" % (src, target)
     with lock_for("remote:" + handle.id):
         try:
             res = dulwich.porcelain.push(
@@ -163,9 +198,9 @@ def push(handle: RepoHandle, branch: str = "", remote: str = "origin",
         info = fetch(handle, remote, username=username, password=password)
         remote_sha = (info.get("refs") or {}).get("refs/heads/" + target)
         # 以远端实际广播的 ref 为准；本地 remote-tracking ref 只是缓存，不能作为依据。
-        if remote_sha and local:
-            verified = remote_sha == local.hex()
+        if remote_sha and local_hex:
+            verified = remote_sha == local_hex
     except Exception:  # noqa: BLE001
         verified = None
-    return {"ok": True, "branch": target, "head": local.hex() if local else "",
+    return {"ok": True, "branch": target, "head": local_hex,
             "ref_status": status, "verified": verified}

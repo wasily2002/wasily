@@ -2,6 +2,8 @@
 from __future__ import annotations
 
 import os
+import stat
+import tempfile
 from typing import Any
 
 import dulwich.objects
@@ -9,8 +11,8 @@ from dulwich.index import Index, IndexEntry
 
 from .repository import GitError, RepoHandle
 from .snapshot import (Snapshot, apply_groups, change_groups, head_snapshot,
-                       hunk_meta, index_entry, index_snapshot, is_binary,
-                       split_lines, worktree_snapshot)
+                       hunk_meta, index_bytes, index_entry, index_snapshot,
+                       is_binary, split_lines, status, worktree_snapshot)
 
 MAX_HUNKS = 500
 
@@ -67,6 +69,52 @@ def unstage(handle: RepoHandle, paths: list[str]) -> dict[str, Any]:
         except KeyError as exc:
             raise GitError("unstage_failed", "文件不在 HEAD 或索引中: %s" % exc) from exc
     return {"ok": True, "unstaged": rels}
+
+
+def discard(handle: RepoHandle, rel: str) -> dict[str, Any]:
+    """放弃单个文件的未暂存改动；未跟踪文件仅在确认未跟踪时删除。
+
+    这里恢复的是索引里的版本，而不是 HEAD 的版本：已暂存内容属于用户
+    显式保留的状态，放弃未暂存改动不能顺带把它也清掉。
+    """
+    rel = handle.rel(rel)
+    with handle.lock:
+        info = status(handle)
+        if rel in info["conflicts"]:
+            raise GitError("conflict", "请先解决冲突，再放弃改动")
+        if rel not in info["changed"] and rel not in info["untracked"]:
+            raise GitError("not_discardable", "文件没有可放弃的未暂存改动")
+        full = handle.abs(rel)
+        if os.path.isdir(full) and not os.path.islink(full):
+            raise GitError("directory_forbidden", "不会递归删除或替换目录")
+        if rel in info["untracked"]:
+            if os.path.lexists(full):
+                os.remove(full)
+            return {"ok": True, "discarded": rel, "untracked": True}
+
+        entry = index_entry(handle.repo, rel)
+        if entry is None:
+            raise GitError("index_missing", "索引中没有可恢复的文件版本")
+        data = index_bytes(handle.repo, rel) or b""
+        mode = int(entry.mode)
+        if os.path.lexists(full):
+            os.remove(full)
+        os.makedirs(os.path.dirname(full), exist_ok=True)
+        if stat.S_ISLNK(mode):
+            os.symlink(os.fsdecode(data), full)
+        else:
+            # 临时文件 + replace，避免写入中断留下半个文件。
+            fd, temporary = tempfile.mkstemp(
+                prefix=".wasily-discard-", dir=os.path.dirname(full))
+            try:
+                with os.fdopen(fd, "wb") as stream:
+                    stream.write(data)
+                os.replace(temporary, full)
+            finally:
+                if os.path.exists(temporary):
+                    os.remove(temporary)
+            os.chmod(full, mode)
+        return {"ok": True, "discarded": rel, "untracked": False}
 
 
 def _pair(handle: RepoHandle, rel: str,

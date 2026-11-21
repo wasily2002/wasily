@@ -150,26 +150,22 @@ def handle_post(handler: Any, path: str, data: dict[str, Any]) -> bool:
             return _send(handler, GitService.reset(
                 repo, str(data.get("mode") or "mixed"),
                 str(data.get("ref") or "HEAD"), _bool(data.get("confirm"))))
-        # 以下 5 个操作新内核尚未原生实现，先复用 git_bridge（同为 dulwich、字节安全），
-        # 保证 /v1/git 表面完整，避免 UI 因缺接口回退到旧栈。
+        # init/discard/revert/remote 增删已迁入 git_core；旧桥只保留给
+        # Agent 运行记录等内部调用，/v1/git 表面不再依赖双栈。
         if path == "/v1/git/init":
-            import git_bridge as _legacy
-            return _send(handler, _legacy.init(repo))
+            return _send(handler, GitService.init(repo))
         if path == "/v1/git/discard":
-            import git_bridge as _legacy
-            return _send(handler, _legacy.discard(repo, str(data.get("rel") or "")))
+            return _send(handler, GitService.discard(
+                repo, str(data.get("rel") or "")))
         if path == "/v1/git/revert":
-            import git_bridge as _legacy
-            return _send(handler, _legacy.revert(
+            return _send(handler, GitService.revert(
                 repo, str(data.get("committish") or data.get("sha") or ""),
                 str(data.get("message") or ""), _bool(data.get("no_commit"))))
         if path == "/v1/git/remote/add":
-            import git_bridge as _legacy
-            return _send(handler, _legacy.remote_add(
+            return _send(handler, GitService.remote_add(
                 repo, str(data.get("name") or "origin"), str(data.get("url") or "")))
         if path == "/v1/git/remote/remove":
-            import git_bridge as _legacy
-            return _send(handler, _legacy.remote_remove(
+            return _send(handler, GitService.remote_remove(
                 repo, str(data.get("name") or "origin")))
         if path == "/v1/git/clone":
             return _send(handler, GitService.clone(

@@ -361,6 +361,17 @@ class KbStore:
         except Exception:  # noqa: BLE001
             return False
 
+    def vector_cache_nowait(self):
+        """非阻塞读取向量缓存：已就绪则返回，否则立即返回 None（绝不触发构建）。
+        检索路径必须用它——否则缓存未建时会在大库上同步扫表数分钟，把接口拖死。"""
+        cache = _VEC_CACHE
+        try:
+            if cache and cache["key"] == self._vec_key():
+                return cache
+        except Exception:  # noqa: BLE001
+            pass
+        return None
+
     def vector_cache(self):
         global _VEC_BUILDING
         cache = _VEC_CACHE
@@ -382,7 +393,11 @@ class KbStore:
     def knn(self, query_vec, limit=60, batch=4000):
         """余弦近邻：优先走内存 int8 矩阵，失败再回退逐批扫表。"""
         q = np.asarray(query_vec, dtype=np.float32).ravel()
-        cache = self.vector_cache()
+        cache = self.vector_cache_nowait()
+        if cache is None or cache.get("key") is None:
+            # 向量缓存未就绪：本轮跳过向量路，由 search() 降级为纯全文（FTS）。
+            # 绝不在这里触发构建或持锁扫表——那会让单次检索变成分钟级并卡死 KB 子系统。
+            return []
         if cache.get("mat") is not None and cache["mat"].shape[0]:
             qn = float(np.linalg.norm(q)) or 1.0
             qi = np.clip(np.rint(q / qn * 127.0), -127, 127).astype(np.float32)

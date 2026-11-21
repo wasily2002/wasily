@@ -1640,6 +1640,20 @@
     body.agent-embed .composer { padding-left: 10px; padding-right: 10px; }
     body.agent-embed .toolbar { gap: 4px; }
   }
+
+  /* 永固用户头像：固定在对话框左下角（chat-wrap 内定位，不随消息滚动，不压输入控件） */
+  .user-dock {
+    position: absolute; left: 16px; bottom: 14px; z-index: 30;
+    width: 40px; height: 40px; border-radius: 50%;
+    display: flex; align-items: center; justify-content: center;
+    background: var(--panel-2, #262626); border: 1px solid var(--line, #333);
+    color: var(--text, #e6e6e6); cursor: pointer; user-select: none;
+    box-shadow: 0 3px 10px rgba(0,0,0,.45);
+    transition: transform .15s ease, border-color .15s ease, color .15s ease;
+  }
+  .user-dock:hover { transform: translateY(-2px); border-color: #3ecf8e; color: #3ecf8e; }
+  .user-dock svg { width: 20px; height: 20px; }
+  @media (max-width: 600px){ .user-dock { width: 36px; height: 36px; left: 12px; bottom: 12px; } }
 </style>
 <script src="/icons.js"></script>
 <link rel="stylesheet" href="/task_hint.css">
@@ -1743,6 +1757,8 @@
       </div>
     </div>
     <div class="chat" id="chat"></div>
+    <!-- 永固用户头像：固定在对话框左下角，不随消息滚动，点击聚焦输入框 -->
+    <div class="user-dock" id="userDock" title="我" onclick="var i=document.getElementById('input');if(i){i.focus();}"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="8" r="3.4"/><path d="M5.5 20c1.1-3.2 3.6-4.8 6.5-4.8s5.4 1.6 6.5 4.8"/></svg></div>
   </div>
 
   <div class="input-area" id="inputArea">
@@ -4793,6 +4809,7 @@ async function requestAIReply(text, imgs, opts) {
       agent: opts.agent || localStorage.getItem('wasily_agent') || 'wasily',
       shield: shieldOn,
       session_id: targetSession,
+      sync_source: 'agent',   // 跨端同步：标记来源，IDE 侧据此区分并跳过自身事件
       max_tool_rounds: 8,
       stream: true
     };
@@ -4884,6 +4901,8 @@ async function requestAIReply(text, imgs, opts) {
         host, persist: isolated ? false : undefined, toolInfo, agentName: opts.agentName,
         ms: doneObj.elapsed ? Math.round(Number(doneObj.elapsed) * 1000) : (Date.now() - turnStart)
       });
+      // 本端消息也打上服务端分配的 msg_id，供同步层去重与一致性核对
+      if (doneObj.msg_id && chat.lastChild) chat.lastChild.setAttribute('data-mid', doneObj.msg_id);
       if (host === chat && doneObj.plan) addPlanCard(doneObj.plan);
     } else if (!(opts.signal && opts.signal.aborted)) {
       addMsg('ai', '⚠️ 连接中断，未收到完整回复，请重试', {

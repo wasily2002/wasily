@@ -204,6 +204,24 @@ def _resolve_file_path(path):
     return p, msg
 
 
+def _current_session_id():
+    """当前请求的会话 id：命令事件带上它，页面能判断归属。
+
+    只能从 sys.modules 里取现成模块：服务以 `python api_server.py` 启动时
+    模块名是 __main__，再写 `import api_server` 会把整个服务重新执行一遍
+    （单实例检测 → sys.exit），在请求线程里表现就是连接被直接断开。
+    """
+    try:
+        for key in ("api_server", "__main__"):
+            mod = sys.modules.get(key)
+            shim = getattr(mod, "_CUR_SESSION", None) if mod is not None else None
+            if shim is not None:
+                return str(shim["sid"])
+    except Exception:
+        pass
+    return ""
+
+
 def shell_exec(command: str, timeout: int = 60, cwd: str = "") -> str:
     """在指定项目目录执行 shell 命令；隔离运行时拒绝越界路径。"""
     try:
@@ -214,6 +232,22 @@ def shell_exec(command: str, timeout: int = 60, cwd: str = "") -> str:
             error = _isolated_command_error(command)
             if error:
                 return "⚠️ " + error
+        # 统一走命令总线：Agent 窗口与 IDE 面板订阅同一条事件流，
+        # 因此任一侧执行命令，另一侧都能看到启动、逐行输出与结束/中断状态。
+        try:
+            import command_bus as _bus
+            res = _bus.run_sync(command, cwd=workdir, timeout=timeout,
+                                source="agent", session_id=_current_session_id())
+            if res.get("status") == "timeout":
+                return f"命令超时（{timeout}秒）"
+            output = res.get("output") or ""
+            if output:
+                return output
+            if res.get("status") == "failed" and res.get("reason"):
+                return f"执行错误: {res['reason']}"
+            return "(命令执行完毕，无输出)"
+        except Exception:  # noqa: BLE001 — 总线不可用时退回旧路径，工具本身不能失效
+            pass
         result = subprocess.run(
             command, shell=True, capture_output=True, text=True,
             timeout=timeout, encoding="utf-8", errors="replace",

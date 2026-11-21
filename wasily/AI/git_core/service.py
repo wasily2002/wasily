@@ -123,6 +123,11 @@ class GitService:
             return index_ops.unstage_hunks(h, rel, ids)
 
     @staticmethod
+    def discard(path: str, rel: str) -> dict[str, Any]:
+        with RepoHandle(path) as h:
+            return index_ops.discard(h, rel)
+
+    @staticmethod
     def branches(path: str) -> dict[str, Any]:
         with RepoHandle(path) as h:
             return refs.branches(h)
@@ -172,6 +177,18 @@ class GitService:
             return res
 
     @staticmethod
+    def revert(path: str, committish: str, message: str = "",
+               no_commit: bool = False) -> dict[str, Any]:
+        with RepoHandle(path) as h:
+            res = refs.revert(h, committish, message, no_commit)
+            audit.append_event(h.id, "", {
+                "actor": "user", "operation": "revert",
+                "committish": committish, "no_commit": no_commit,
+                "head_after": res.get("head_sha", ""), "result": "passed",
+            })
+            return res
+
+    @staticmethod
     def audit_trail(path: str, limit: int = 50) -> dict[str, Any]:
         with RepoHandle(path) as h:
             return {"ok": True, "events": audit.read_events(h.id, limit)}
@@ -192,6 +209,26 @@ class GitService:
     def remotes(path: str) -> dict[str, Any]:
         with RepoHandle(path) as h:
             return remote.remotes(h)
+
+    @staticmethod
+    def remote_add(path: str, name: str, url: str) -> dict[str, Any]:
+        with RepoHandle(path) as h:
+            res = remote.add_remote(h, name, url)
+            audit.append_event(h.id, "", {
+                "actor": "user", "operation": "remote_add",
+                "remote": res.get("name", ""), "result": "passed",
+            })
+            return res
+
+    @staticmethod
+    def remote_remove(path: str, name: str) -> dict[str, Any]:
+        with RepoHandle(path) as h:
+            res = remote.remove_remote(h, name)
+            audit.append_event(h.id, "", {
+                "actor": "user", "operation": "remote_remove",
+                "remote": res.get("name", ""), "result": "passed",
+            })
+            return res
 
     @staticmethod
     def fetch(path: str, name: str = "origin", prune: bool = False,

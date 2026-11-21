@@ -1262,6 +1262,106 @@
   #capEditModal .cem-msg.bad { color:#e06c75; }
   #capEditModal .cem-msg.ok { color:#3ecf8e; }
   #capEditModal .cem-ops .btn { height:30px; padding:0 14px; font-size:12.5px; }
+
+  /* ===== 文件管理器（三栏：树 / 列表 / 预览），与深色主题一致 ===== */
+  #pane-files { height:100%; }
+  #pane-files.on { display:flex; flex-direction:column; }
+  .fm-root { flex:1; min-height:0; display:flex; flex-direction:column; background:#171717;
+             position:relative; }
+  .fm-bar { flex:none; display:flex; flex-direction:column; align-items:stretch; gap:8px;
+            padding:10px 12px; border-bottom:1px solid #2a2a2a; background:#1d1d1d; }
+  .fm-row { display:flex; align-items:center; gap:8px; min-width:0; }
+  .fm-bar input { padding:6px 10px; border:1px solid #3a3a3a; border-radius:7px;
+                  background:#202020; color:#e6e6e6; font-size:12.5px; outline:none; }
+  .fm-bar input:focus { border-color:#3ecf8e; }
+  .fm-bar .btn { flex:none; }
+  #fmPathInput { flex:1 1 140px; min-width:100px; font-family:Consolas,monospace; }
+  #fmSearch { flex:0 0 118px; width:118px; }
+  .fm-crumbs { display:flex; align-items:center; gap:2px; flex-wrap:nowrap; flex:1 1 auto;
+               min-width:0; overflow-x:auto; scrollbar-width:none; }
+  .fm-crumbs::-webkit-scrollbar { display:none; }
+  .fm-crumbs .crumb { padding:3px 8px; border-radius:6px; background:#262626; color:#c9cdd4;
+                      font-size:11.5px; cursor:pointer; white-space:nowrap; flex:none; }
+  .fm-crumbs .crumb:hover { background:#333; color:#fff; }
+  .fm-crumbs .sep { color:#555; font-size:11px; }
+  .fm-kbstat { font-size:11px; color:#8f959e; margin-left:auto; white-space:nowrap; }
+  .fm-body { flex:1; min-height:0; display:flex; }
+  .fm-tree { width:210px; flex:none; border-right:1px solid #2a2a2a; background:#1a1a1a;
+             overflow:auto; padding:8px 0; }
+  .fm-tree .th { font-size:10.5px; color:#6a6a6a; padding:6px 14px 4px; text-transform:uppercase;
+                 letter-spacing:.5px; }
+  .fm-tree .ti { display:flex; align-items:center; gap:7px; padding:6px 14px; font-size:12.5px;
+                 color:#c9cdd4; cursor:pointer; }
+  .fm-tree .ti:hover { background:#242424; }
+  .fm-tree .ti.on { background:#2a3a2e; color:#4ecb83; }
+  .fm-tree .ti svg { width:15px; height:15px; flex:none; }
+  .fm-list { flex:1; min-width:0; overflow:auto; }
+  .fm-list table { width:100%; border-collapse:collapse; font-size:12.5px; table-layout:fixed; }
+  .fm-list thead th { position:sticky; top:0; background:#1d1d1d; color:#8f959e; font-weight:500;
+                      text-align:left; padding:8px 12px; border-bottom:1px solid #2a2a2a;
+                      font-size:11px; z-index:1; }
+  .fm-list thead th.num { width:72px; text-align:right; }
+  .fm-list thead th:nth-child(3){ width:132px; }
+  .fm-list thead th:nth-child(4){ width:66px; }
+  .fm-list thead th:nth-child(5){ width:80px; }
+  .fm-list thead th:nth-child(6){ width:64px; }
+  .fm-list tbody td { padding:7px 12px; border-bottom:1px solid #222; color:#d6d6d6;
+                      white-space:nowrap; overflow:hidden; text-overflow:ellipsis; }
+  .fm-list tbody tr { cursor:pointer; }
+  .fm-list tbody tr:hover { background:#212121; }
+  .fm-list .nm { display:flex; align-items:center; gap:8px; min-width:0; }
+  .fm-list .nm .fn { overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
+  .fm-list .ic { width:16px; height:16px; flex:none; font-size:14px; text-align:center; line-height:16px; }
+  .fm-list .sz { color:#8f959e; text-align:right; }
+  .fm-list .mt { color:#8f959e; }
+  .fm-list .tp { color:#8f959e; }
+  .fm-list .badge { padding:1px 6px; border-radius:4px; font-size:10px; }
+  .fm-list .badge.in { background:#16301f; color:#4ecb83; }
+  .fm-list .badge.out { background:#2a2a2a; color:#8f959e; }
+  .fm-list .acts { display:flex; justify-content:flex-end; }
+  .fm-list .acts button { background:transparent; border:1px solid #3a3a3a; color:#c9cdd4;
+                          border-radius:5px; padding:2px 7px; font-size:10.5px; cursor:pointer;
+                          white-space:nowrap; }
+  .fm-list .acts button:hover { background:#2a2a2a; color:#fff; }
+  .fm-list .empty { padding:40px; text-align:center; color:#6a6a6a; font-size:12.5px; }
+  .fm-preview { width:360px; flex:none; border-left:1px solid #2a2a2a; background:#1a1a1a;
+                overflow:auto; display:flex; flex-direction:column; }
+  .fm-preview .ph2 { padding:10px 14px; border-bottom:1px solid #2a2a2a; font-size:12px;
+                     color:#c9cdd4; display:flex; align-items:center; gap:8px; flex:none;
+                     justify-content:space-between; }
+  .fm-preview .ph2 .t { overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
+  .fm-pvclose { display:none; flex:none; background:transparent; border:1px solid #3a3a3a;
+                color:#c9cdd4; border-radius:5px; width:22px; height:22px; line-height:1;
+                font-size:12px; cursor:pointer; }
+  .fm-pvclose:hover { background:#2a2a2a; color:#fff; }
+  .fm-preview .body { padding:12px 14px; flex:1; min-height:0; overflow:auto; }
+  .fm-preview pre { margin:0; white-space:pre-wrap; word-break:break-word; font-family:Consolas,monospace;
+                    font-size:12px; line-height:1.55; color:#d4d4d4; }
+  .fm-preview img { max-width:100%; border-radius:6px; display:block; }
+  .fm-preview .note { color:#8f959e; font-size:12px; }
+  .fm-preview .kbrow { display:flex; align-items:center; gap:8px; font-size:11px; color:#8f959e; margin-top:8px; }
+  .fm-preview .kbsrch { margin-top:10px; display:flex; gap:6px; }
+  .fm-preview .kbsrch input { flex:1; min-width:0; padding:6px 9px; border:1px solid #3a3a3a;
+                              border-radius:6px; background:#202020; color:#e6e6e6; font-size:12px; outline:none; }
+  .fm-preview .kbsrch button { padding:6px 10px; border:1px solid #3a3a3a; border-radius:6px;
+                               background:#262626; color:#d6d6d6; font-size:12px; cursor:pointer; }
+  .fm-preview .snip { background:#202020; border:1px solid #2e2e2e; border-radius:6px; padding:8px 10px;
+                      margin-top:8px; font-size:11.5px; color:#c9cdd4; }
+  .fm-preview .snip .sp { color:#4ecb83; font-size:10.5px; }
+  /* 窄面板适配：预览改为右侧抽屉，避免把文件列表挤成 0 宽 */
+  @media (max-width:1180px){
+    .fm-preview { position:absolute; top:0; right:0; bottom:0; width:min(360px,86%);
+                  z-index:20; box-shadow:-8px 0 24px rgba(0,0,0,.5);
+                  transform:translateX(102%); transition:transform .18s ease; }
+    .fm-root.pv-open .fm-preview { transform:none; }
+    .fm-pvclose { display:block; }
+  }
+  @media (max-width:860px){ .fm-tree { display:none; } }
+  /* 更窄时隐藏次要列，优先保证文件名与操作可见 */
+  @media (max-width:980px){
+    .fm-list table th:nth-child(3), .fm-list table td:nth-child(3),
+    .fm-list table th:nth-child(4), .fm-list table td:nth-child(4) { display:none; }
+  }
 </style>
 </head>
 <body class="wb-hidden">
@@ -1312,6 +1412,9 @@
   </div>
   <div class="ni" data-v="outputs" onclick="go('outputs')">
     <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7"><rect x="3.5" y="4.5" width="17" height="15" rx="2.5"/><path d="M8 16v-4M12 16v-7M16 16v-2.5"/></svg>我的产物
+  </div>
+  <div class="ni" data-v="files" onclick="go('files')">
+    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7"><path d="M3 6.5A1.5 1.5 0 0 1 4.5 5h5l2 2h8A1.5 1.5 0 0 1 21 8.5v9A1.5 1.5 0 0 1 19.5 19h-15A1.5 1.5 0 0 1 3 17.5z"/></svg>文件
   </div>
   <div class="ni" data-v="sites" onclick="go('sites')">
     <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7"><path d="M12 21s6.5-6.1 6.5-11A6.5 6.5 0 0 0 5.5 10c0 4.9 6.5 11 6.5 11z"/><circle cx="12" cy="10" r="2.4"/></svg>我的站点<span class="free-tag">限免</span>
@@ -1421,6 +1524,33 @@
 
       <div class="sect" id="kbDocsTitle" style="margin-top:22px">最近入库</div>
       <div class="grid" id="kbDocs"><div class="card"><div class="cb"><div class="name">加载中…</div></div></div></div>
+    </div>
+  </section>
+
+  <!-- ================= 文件管理器 ================= -->
+  <section class="pane" id="pane-files">
+    <div class="fm-root">
+      <div class="fm-bar">
+        <div class="fm-row">
+          <button class="btn ghost" onclick="fmUp()" title="上级目录">↑ 上级</button>
+          <div class="fm-crumbs" id="fmCrumbs"></div>
+          <label class="btn pri" style="cursor:pointer">上传<input type="file" multiple hidden id="fmUpload" onchange="fmUpload(this)"></label>
+          <button class="btn" onclick="fmIndexFolder()">索引此目录</button>
+        </div>
+        <div class="fm-row">
+          <input id="fmPathInput" placeholder="输入路径回车跳转" onkeydown="if(event.key==='Enter')fmGoto(this.value)">
+          <input id="fmSearch" placeholder="过滤文件名…" oninput="fmFilter(this.value)">
+          <span class="fm-kbstat" id="fmKbStat"></span>
+        </div>
+      </div>
+      <div class="fm-body">
+        <div class="fm-tree" id="fmTree"></div>
+        <div class="fm-list" id="fmList"><div class="empty">加载中…</div></div>
+        <div class="fm-preview" id="fmPreview">
+          <div class="ph2">预览</div>
+          <div class="body"><div class="note">选择左侧文件以预览内容；可在下方检索当前目录已入库的内容。</div></div>
+        </div>
+      </div>
     </div>
   </section>
 
@@ -2382,6 +2512,7 @@ function go(v){
   if(v==='sites') loadSites();
   if(v==='chat') loadDiff();
   if(v==='kb') kbRefresh();
+  if(v==='files') loadFiles();
   history.replaceState(null,'','#'+v);
 }
 
@@ -4992,6 +5123,225 @@ if(window.workbenchAPI && window.workbenchAPI.isElectron){
   let n = 0;
   const t = setInterval(()=>{ apply(); if(++n >= 12) clearInterval(t); }, 400);
 })();
+
+/* ===== 文件管理器：/v1/files/* 浏览/预览/上传/下载 + 知识库深度集成 ===== */
+const FM_DEFAULT = 'D:/煮饭仔点餐/项目文件/项目介绍';
+let fmCurrent = '';
+let fmEntries = [];
+let fmKbTimer = 0;
+let fmBound = false;
+
+function fmSize(n){ n=Number(n)||0; if(n<1024)return n+'B'; if(n<1048576)return (n/1024).toFixed(1)+'KB';
+  if(n<1073741824)return (n/1048576).toFixed(1)+'MB'; return (n/1073741824).toFixed(2)+'GB'; }
+function fmTime(t){ if(!t)return '-'; const d=new Date(t*1000),p=x=>String(x).padStart(2,'0');
+  return d.getFullYear()+'-'+p(d.getMonth()+1)+'-'+p(d.getDate())+' '+p(d.getHours())+':'+p(d.getMinutes()); }
+function fmIcon(e){ if(e.is_dir)return '📁'; const m={image:'🖼️',pdf:'📕',docx:'📘',xlsx:'📗',pptx:'📙',text:'📄'}; return m[e.kind]||'📄'; }
+function fmKindLabel(e){ if(e.is_dir)return '文件夹'; const m={text:'文本',image:'图片',pdf:'PDF',docx:'Word',xlsx:'Excel',pptx:'PPT',other:'其它'}; return m[e.kind]||e.ext||'文件'; }
+function fmApi(s){ return '/v1/files/'+s; }
+
+function fmBind(){
+  if(fmBound) return; fmBound = true;
+  const list=document.getElementById('fmList');
+  if(list) list.addEventListener('click',ev=>{
+    const tr=ev.target.closest('tr[data-path]'); if(!tr) return;
+    if(ev.target.closest('[data-dl]')){ ev.preventDefault(); fmDownload(tr.getAttribute('data-path')); return; }
+    const path=tr.getAttribute('data-path');
+    if(tr.getAttribute('data-dir')==='1') fmOpenDir(path); else fmPreview(path);
+  });
+  const cr=document.getElementById('fmCrumbs');
+  if(cr) cr.addEventListener('click',ev=>{ const c=ev.target.closest('.crumb[data-path]'); if(c) fmOpenDir(c.getAttribute('data-path')); });
+  const tr2=document.getElementById('fmTree');
+  if(tr2) tr2.addEventListener('click',ev=>{ const t=ev.target.closest('.ti[data-path]'); if(t) fmOpenDir(t.getAttribute('data-path')); });
+}
+
+async function loadFiles(){
+  fmBind();
+  fmRenderTree();
+  fmList(fmCurrent || FM_DEFAULT);
+  // 顺带触发知识库预热（向量矩阵 + 嵌入子进程），用户点检索时不再冷等
+  kbFetch('/v1/kb/status');
+}
+
+function fmRenderTree(){
+  const box=document.getElementById('fmTree'); if(!box) return;
+  box.innerHTML='<div class="th">快速访问</div>'+
+    '<div class="ti'+(fmCurrent===FM_DEFAULT?' on':'')+'" data-path="'+esc(FM_DEFAULT)+'"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7"><path d="M3 6.5A1.5 1.5 0 0 1 4.5 5h5l2 2h8A1.5 1.5 0 0 1 21 8.5v9A1.5 1.5 0 0 1 19.5 19h-15A1.5 1.5 0 0 1 3 17.5z"/></svg>项目根目录</div>'+
+    '<div class="th">此电脑</div><div id="fmDrives"></div>';
+  kbFetch(fmApi('list')).then(d=>{
+    const dv=document.getElementById('fmDrives'); if(!dv||!d.ok) return;
+    let h='';
+    (d.drives||[]).forEach(dr=>{
+      h+='<div class="ti" data-path="'+esc(dr)+'"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7"><rect x="3" y="7" width="18" height="10" rx="2"/><circle cx="17" cy="12" r="1" fill="currentColor" stroke="none"/></svg>'+esc(dr.replace(/\\$/,''))+'</div>';
+    });
+    dv.innerHTML=h;
+  });
+}
+
+async function fmList(path){
+  const list=document.getElementById('fmList');
+  const url=fmApi('list')+(path?('?path='+encodeURIComponent(path)):'');
+  const d=await kbFetch(url);
+  if(!d.ok){ list.innerHTML='<div class="empty">读取失败：'+esc(d.error||'')+'</div>'; return; }
+  fmCurrent=d.path||path||'';
+  fmEntries=d.entries||[];
+  fmClosePv();
+  const inp=document.getElementById('fmPathInput');
+  if(inp && document.activeElement!==inp) inp.value=fmCurrent;
+  fmRenderCrumbs();
+  fmRenderList(fmEntries);
+  fmRenderTree();
+  fmLoadKbStates();
+}
+
+function fmRenderCrumbs(){
+  const box=document.getElementById('fmCrumbs'); if(!box) return;
+  if(!fmCurrent){ box.innerHTML=''; return; }
+  const parts=fmCurrent.replace(/\\/g,'/').split('/').filter(Boolean);
+  let html='', acc='';
+  parts.forEach((seg,i)=>{
+    acc = acc ? (acc+'/'+seg) : seg;
+    const full = (i===0 && /^[A-Za-z]:$/.test(seg)) ? (seg+'/') : acc;
+    html+='<span class="crumb" data-path="'+esc(full)+'">'+esc(seg)+'</span>';
+    if(i<parts.length-1) html+='<span class="sep">/</span>';
+  });
+  box.innerHTML=html;
+}
+
+function fmRenderList(entries){
+  const list=document.getElementById('fmList'); if(!list) return;
+  if(!entries.length){ list.innerHTML='<div class="empty">空目录</div>'; return; }
+  let html='<table><thead><tr><th>名称</th><th class="num">大小</th>'+
+    '<th>修改时间</th><th>类型</th><th>知识库</th><th>操作</th></tr></thead><tbody>';
+  entries.forEach(e=>{
+    const kb = e.is_dir ? '' : '<span class="badge out" data-kbpath="'+esc(e.path)+'">…</span>';
+    const act = e.is_dir ? '' : '<button data-dl title="下载">下载</button>';
+    html+='<tr data-path="'+esc(e.path)+'" data-dir="'+(e.is_dir?'1':'0')+'">'+
+      '<td><div class="nm"><span class="ic">'+fmIcon(e)+'</span><span class="fn">'+esc(e.name)+'</span></div></td>'+
+      '<td class="sz">'+(e.is_dir?'-':fmSize(e.size))+'</td>'+
+      '<td class="mt">'+fmTime(e.mtime)+'</td>'+
+      '<td class="tp">'+fmKindLabel(e)+'</td>'+
+      '<td>'+kb+'</td>'+
+      '<td><div class="acts">'+act+'</div></td></tr>';
+  });
+  html+='</tbody></table>';
+  list.innerHTML=html;
+}
+
+function fmOpenDir(path){ fmList(path); }
+function fmUp(){
+  if(!fmCurrent) return;
+  kbFetch(fmApi('list')+'?path='+encodeURIComponent(fmCurrent)).then(d=>{
+    if(d.ok && d.parent && d.parent!==fmCurrent) fmList(d.parent);
+  });
+}
+function fmGoto(v){ v=(v||'').trim(); if(v) fmList(v); }
+function fmFilter(q){
+  q=(q||'').toLowerCase();
+  fmRenderList(q?fmEntries.filter(e=>e.name.toLowerCase().includes(q)):fmEntries);
+  fmLoadKbStates();
+}
+
+async function fmLoadKbStates(){
+  const cells=document.querySelectorAll('#fmList [data-kbpath]');
+  for(const cell of cells){
+    const p=cell.getAttribute('data-kbpath'); if(!p) continue;
+    try{
+      const d=await kbFetch(fmApi('kb-status')+'?path='+encodeURIComponent(p));
+      if(d.ok && d.kb){ cell.textContent=d.kb.indexed?'已入库':'未入库';
+        cell.className='badge '+(d.kb.indexed?'in':'out'); }
+    }catch(_){}
+  }
+}
+
+async function fmPreview(path){
+  const pv=document.getElementById('fmPreview'); if(!pv) return;
+  pv.querySelector('.body').innerHTML='<div class="note">加载中…</div>';
+  const d=await kbFetch(fmApi('preview')+'?path='+encodeURIComponent(path));
+  const name=(path||'').split(/[\\/]/).pop()||path;
+  let head='<div class="ph2"><span class="t">'+esc(name)+'</span>'+
+    '<button class="fm-pvclose" onclick="fmClosePv()" title="关闭预览">✕</button></div>';
+  let body='';
+  if(!d.ok) body='<div class="note">预览失败：'+esc(d.error||'')+'</div>';
+  else if(d.kind==='image' && d.raw_url) body='<img src="'+d.raw_url+'" alt="preview">';
+  else if(d.kind==='other') body='<div class="note">'+esc(d.note||'该类型暂不支持在线预览')+'</div>'+
+    '<div style="margin-top:10px"><button class="btn" id="fmPvDl">下载</button></div>';
+  else { body='<pre>'+esc(d.text||'')+'</pre>'; if(d.note) body+='<div class="note" style="margin-top:8px">'+esc(d.note)+'</div>'; }
+  const kb=d.kb||{};
+  const kbs='<div class="kbrow">'+(kb.indexed?'<span class="badge in">已入库</span>':'<span class="badge out">未入库</span>')+
+    '<span>大小 '+fmSize(d.size||0)+' · '+fmKindLabel({is_dir:false,kind:d.kind})+'</span></div>'+
+    '<div class="kbsrch"><input id="fmKbQ" placeholder="在当前目录已入库内容中检索…" onkeydown="if(event.key===\'Enter\')fmKbSearch()"><button onclick="fmKbSearch()">检索</button></div>'+
+    '<div id="fmKbResults"></div>';
+  pv.innerHTML=head+'<div class="body">'+body+kbs+'</div>';
+  const dl=document.getElementById('fmPvDl'); if(dl) dl.onclick=()=>fmDownload(path);
+  const root=document.querySelector('#pane-files .fm-root');
+  if(root && window.innerWidth<=1180) root.classList.add('pv-open');
+}
+
+function fmClosePv(){
+  const r=document.querySelector('#pane-files .fm-root');
+  if(r) r.classList.remove('pv-open');
+}
+
+function fmKbSearch(){
+  const q=(document.getElementById('fmKbQ')||{}).value||'';
+  const out=document.getElementById('fmKbResults');
+  if(!q||!out) return;
+  out.innerHTML='<div class="note">检索中…</div>';
+  kbFetch('/v1/kb/search?q='+encodeURIComponent(q)+'&limit=20').then(d=>{
+    if(!d.ok||!d.results){ out.innerHTML='<div class="note">无结果</div>'; return; }
+    const prefix=fmCurrent.replace(/\\/g,'/').toLowerCase();
+    const hits=d.results.filter(r=>(r.path||'').replace(/\\/g,'/').toLowerCase().startsWith(prefix));
+    if(!hits.length){ out.innerHTML='<div class="note">当前目录下无命中</div>'; return; }
+    let html='';
+    hits.slice(0,8).forEach(r=>{
+      const snip=(r.snippets&&r.snippets[0]&&r.snippets[0].text)||'';
+      html+='<div class="snip"><div class="sp">'+esc(r.name||r.path)+' · '+((r.score||0).toFixed(3))+'</div><div>'+esc(snip).substring(0,300)+'</div></div>';
+    });
+    out.innerHTML=html;
+  });
+}
+
+function fmDownload(path){
+  if(!path) return;
+  window.location.href=fmApi('download')+'?path='+encodeURIComponent(path);
+}
+
+async function fmUpload(input){
+  if(!input.files||!input.files.length) return;
+  if(!fmCurrent){ alert('请先选择目标目录'); return; }
+  const fd=new FormData(); fd.append('dir',fmCurrent);
+  for(const f of input.files) fd.append('files',f);
+  input.value='';
+  const stat=document.getElementById('fmKbStat'); if(stat) stat.textContent='上传中…';
+  try{
+    const r=await fetch(fmApi('upload'),{method:'POST',body:fd,cache:'no-store'});
+    const d=await r.json();
+    if(stat) stat.textContent=d.ok?('已上传 '+(d.saved||[]).length+' 个文件'):('上传失败：'+(d.error||''));
+    if(d.ok) fmList(fmCurrent);
+  }catch(e){ if(stat) stat.textContent='上传失败：'+String(e); }
+}
+
+async function fmIndexFolder(){
+  if(!fmCurrent){ alert('请先选择目录'); return; }
+  const stat=document.getElementById('fmKbStat'); if(stat) stat.textContent='提交索引…';
+  try{
+    const r=await fetch('/v1/kb/scan',{method:'POST',headers:{'Content-Type':'application/json'},
+      body:JSON.stringify({roots:[fmCurrent]}),cache:'no-store'});
+    const d=await r.json();
+    if(stat) stat.textContent=(d&&d.ok)?'索引已启动，轮询进度…':('提交失败：'+((d&&d.error)||''));
+  }catch(e){ if(stat) stat.textContent='提交失败：'+String(e); return; }
+  if(fmKbTimer) clearInterval(fmKbTimer);
+  fmKbTimer=setInterval(async()=>{
+    const pane=document.getElementById('pane-files');
+    if(!pane||!pane.classList.contains('on')){ clearInterval(fmKbTimer); fmKbTimer=0; return; }
+    const st=await kbFetch('/v1/kb/status');
+    if(st.ok&&st.index){
+      const ix=st.index, s=document.getElementById('fmKbStat');
+      if(s) s.textContent=ix.running?('索引中：已索引 '+ix.indexed+' / 发现 '+ix.found+' · 错误 '+ix.errors):'索引完成';
+      if(!ix.running){ clearInterval(fmKbTimer); fmKbTimer=0; fmList(fmCurrent); }
+    }
+  },2500);
+}
 
 /* 初始化 */
 document.getElementById('chatFrame').src = agentChatUrl();

@@ -224,6 +224,11 @@ def _raw(handler, raw_path: str) -> bool:
     f = _open_for_stream(handler, _norm(raw_path), download=False)
     if f is None:
         return True
+    # HEAD 只需首部：_open_for_stream 已发出正确的 Content-Length/Content-Type，
+    # 不必再把文件内容读一遍（全局 _HeadWfile 也会丢弃响应体，这里仅省磁盘 IO）
+    if handler.command == "HEAD":
+        f.close()
+        return True
     try:
         while True:
             buf = f.read(CHUNK)
@@ -238,6 +243,10 @@ def _raw(handler, raw_path: str) -> bool:
 def _download(handler, raw_path: str) -> bool:
     f = _open_for_stream(handler, _norm(raw_path), download=True)
     if f is None:
+        return True
+    # HEAD 只需首部：Content-Length / Content-Disposition 已发出，跳过文件内容读取
+    if handler.command == "HEAD":
+        f.close()
         return True
     try:
         while True:

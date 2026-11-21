@@ -194,6 +194,8 @@ async function callAI(messages, maxTokens, options) {
 async function callAIStream(messages, maxTokens, options) {
     options = options || {};
     const onEvent = options.onEvent || function () { };
+    // 跨端同步：本轮消息 id 由服务端分配，面板与 Agent 页共用同一标识去重
+    let turnMid = '';
     // mode: 'solo'（Agent）→ 不限轮数（0 = 无限长度思考，服务端按墙钟预算 + 上下文池化兜底）
     //       'plan' → 最多 3 轮（只读调研并产出计划）
     //       'ask'  → 最多 2 轮（只读问答）
@@ -247,7 +249,7 @@ async function callAIStream(messages, maxTokens, options) {
                 gotAnyEvent = true;
                 if (ev.ev === 'delta') { streamed += ev.t; onEvent(ev); }
                 else if (ev.ev === 'reset') { streamed = ''; onEvent(ev); }
-                else if (ev.ev === 'done') { doneEv = ev; }
+                else if (ev.ev === 'done') { doneEv = ev; if (ev.msg_id) turnMid = ev.msg_id; }
                 else { onEvent(ev); }
             }
         }
@@ -272,6 +274,7 @@ async function callAIStream(messages, maxTokens, options) {
     if (doneEv) {
         // 归一化成与 /v1/chat/completions 相同的数据结构，后续逻辑无需分支
         doneEv.choices = [{ message: { role: 'assistant', content: stripToolFences(doneEv.content || streamed) } }];
+        if (!doneEv.msg_id && turnMid) doneEv.msg_id = turnMid;
         return doneEv;
     }
     // 空返回不塞占位文案：交给上层自动重试 / 明确报错；
@@ -4936,6 +4939,17 @@ function startIdeBridge(context) {
                     // 在名为「wasily AI」的集成终端中执行命令（不存在则创建），并捕获输出回传
                     const cmd = String(body.command || '').trim();
                     if (!cmd) { send(400, { ok: false, error: 'command 为空' }); return; }
+                    // 镜像到后端命令总线：Agent 窗口与 IDE 面板看到同一条命令的实时状态与逐行输出
+                    const mirror = (payload) => fetch(getServerUrl() + '/v1/commands/ingest', {
+                        method: 'POST', headers: { 'Content-Type': 'application/json' },
+                        body: JSON.stringify(payload)
+                    }).then((r) => r.json()).catch(() => null);
+                    const folders = vscode.workspace.workspaceFolders;
+                    const mirrorStart = await mirror({
+                        action: 'start', command: cmd, source: 'ide', owner: 'ide',
+                        cwd: folders && folders[0] ? folders[0].uri.fsPath : ''
+                    });
+                    const mirrorId = mirrorStart && mirrorStart.run ? mirrorStart.run.id : '';
                     let term = vscode.window.terminals.find((t) => t.name === 'wasily AI');
                     if (!term) term = vscode.window.createTerminal({ name: 'wasily AI' });
                     term.show(false);
@@ -4949,11 +4963,27 @@ function startIdeBridge(context) {
                         try {
                             const exec = si.executeCommand(cmd);
                             let out = '';
+                            let tail = '';
                             if (exec && typeof exec.read === 'function') {
                                 for await (const chunk of exec.read()) {
-                                    out += String(chunk || '');
+                                    const text = String(chunk || '');
+                                    out += text;
+                                    if (mirrorId) {
+                                        // 按行切分实时上报；末段不完整行留到下一块拼接
+                                        tail += text;
+                                        const parts = tail.split(/\r?\n/);
+                                        tail = parts.pop();
+                                        if (parts.length) {
+                                            mirror({ action: 'line', run_id: mirrorId,
+                                                     lines: parts.map((t) => ({ stream: 'stdout', text: t })) });
+                                        }
+                                    }
                                     if (out.length > 20000) break;
                                 }
+                            }
+                            if (mirrorId && tail) {
+                                mirror({ action: 'line', run_id: mirrorId,
+                                         lines: [{ stream: 'stdout', text: tail }] });
                             }
                             // 去掉 shell integration 的 OSC 633 标记与 ANSI 控制序列
                             out = out
@@ -4965,12 +4995,19 @@ function startIdeBridge(context) {
                                 const c = await exec.exitCode;
                                 code = (c === undefined || c === null) ? null : c;
                             } catch (_) { /* 无退出码 */ }
+                            if (mirrorId) mirror({ action: 'finish', run_id: mirrorId, exit_code: code });
                             send(200, {
                                 ok: true, output: out.slice(-8000), exitCode: code,
                                 detail: '已在终端 wasily AI 执行并捕获输出'
                             });
                             return;
                         } catch (e) { /* shell integration 不可用 → 回退 sendText */ }
+                    }
+                    if (mirrorId) {
+                        // 拿不到 shell integration 就没有输出流，也要让状态收尾，不能一直挂着「运行中」
+                        mirror({ action: 'line', run_id: mirrorId,
+                                 lines: [{ stream: 'stderr', text: '该终端未启用 shell integration，输出无法捕获' }] });
+                        mirror({ action: 'finish', run_id: mirrorId, exit_code: null });
                     }
                     term.sendText(cmd, true);
                     send(200, {
@@ -5839,11 +5876,3 @@ window.addEventListener('resize', () => {
     simulation.force('center', d3.forceCenter(w / 2, h / 2));
     simulation.alpha(0.3).restart();
 });
-</script>
-</body>
-</html>`;
-}
-
-function deactivate() {}
-
-module.exports = { activate, deactivate };

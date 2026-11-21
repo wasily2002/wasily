@@ -103,6 +103,39 @@ class GitApiTest(unittest.TestCase):
         rows = self._get("/v1/iterations", "path=" + self.root).payload["iterations"]
         self.assertEqual(rows[0]["state"], "committed")
 
+    def test_migrated_routes_use_new_core(self) -> None:
+        # discard 走新内核：恢复到索引/HEAD 版本
+        with open(os.path.join(self.root, "a.txt"), "w", encoding="utf-8") as f:
+            f.write("dirty\n")
+        h = self._post("/v1/git/discard", {"path": self.root, "rel": "a.txt"})
+        self.assertEqual(h.status, 200, h.payload)
+        with open(os.path.join(self.root, "a.txt"), encoding="utf-8") as f:
+            self.assertEqual(f.read(), "hello\n")
+
+        # revert 在脏树上必须拒绝，而不是覆盖工作区
+        with open(os.path.join(self.root, "a.txt"), "w", encoding="utf-8") as f:
+            f.write("dirty again\n")
+        h = self._post("/v1/git/revert", {"path": self.root, "committish": "HEAD"})
+        self.assertEqual(h.status, 400)
+        self.assertEqual(h.payload["code"], "dirty_worktree")
+
+        # remote 增删同属新内核，且拒绝内嵌凭据
+        h = self._post("/v1/git/remote/add", {
+            "path": self.root, "name": "origin",
+            "url": "https://u:p@example.com/a.git"})
+        self.assertEqual(h.status, 400)
+        self.assertEqual(h.payload["code"], "url_has_credentials")
+        url = "file:///" + self.wt.replace("\\", "/")
+        h = self._post("/v1/git/remote/add", {
+            "path": self.root, "name": "origin", "url": url})
+        self.assertEqual(h.status, 200, h.payload)
+        self.assertIn("origin",
+                      self._get("/v1/git/remotes", "path=" + self.root).payload["remotes"])
+        h = self._post("/v1/git/remote/remove", {"path": self.root, "name": "origin"})
+        self.assertEqual(h.status, 200, h.payload)
+        self.assertNotIn("origin",
+                         self._get("/v1/git/remotes", "path=" + self.root).payload["remotes"])
+
 
 if __name__ == "__main__":
     unittest.main()

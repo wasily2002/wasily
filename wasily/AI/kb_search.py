@@ -97,6 +97,11 @@ def search(query, kind=None, limit=10, per_file=2):
     vlist, flist, mode = [], [], "hybrid"
     vec_err = ""
     try:
+        if not store.vector_cache_ready():
+            # 向量缓存尚未就绪：顺手启动后台预热，本次直接走纯全文，
+            # 避免首次检索把请求线程拖成分钟级（2.9GB 全表扫描）。
+            warm_vector_cache()
+            raise RuntimeError("vector cache warming")
         qvec = _encoder().query(q)
         vlist = [cid for _s, cid in store.knn(qvec, cand)]
     except Exception as exc:  # noqa: BLE001 嵌入不可用时降级为纯全文

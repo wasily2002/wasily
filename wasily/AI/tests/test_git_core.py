@@ -390,6 +390,73 @@ class GitCoreTest(unittest.TestCase):
         self.assertTrue(any(e.get("operation") == "commit" for e in events))
         self.assertTrue(all(e.get("event_hash") for e in events))
 
+    # ---------- 从旧桥迁入的操作 ----------
+
+    def test_discard_restores_index_and_only_deletes_untracked(self) -> None:
+        self._commit_file("d.txt", "head\n")
+        _write(os.path.join(self.root, "d.txt"), "index\n")
+        GitService.stage(self.root, ["d.txt"])
+        _write(os.path.join(self.root, "d.txt"), "work\n")
+        res = GitService.discard(self.root, "d.txt")
+        self.assertTrue(res["ok"], res)
+        self.assertFalse(res["untracked"])
+        # 恢复的是索引版本，已暂存内容不受影响
+        self.assertEqual(_read(os.path.join(self.root, "d.txt")), b"index\n")
+        self.assertEqual(GitService.content(self.root, "d.txt", "index")["text"],
+                         "index\n")
+
+        _write(os.path.join(self.root, "tmp.txt"), "temporary\n")
+        removed = GitService.discard(self.root, "tmp.txt")
+        self.assertTrue(removed["untracked"])
+        self.assertFalse(os.path.exists(os.path.join(self.root, "tmp.txt")))
+
+        with self.assertRaises(GitError) as ctx:
+            GitService.discard(self.root, "d.txt")
+        self.assertEqual(ctx.exception.code, "not_discardable")
+
+    def test_discard_rejects_conflicts_and_directories(self) -> None:
+        self._commit_file("base.txt", "x\n")
+        os.makedirs(os.path.join(self.root, "dir"))
+        with self.assertRaises(GitError) as ctx:
+            GitService.discard(self.root, "dir")
+        self.assertIn(ctx.exception.code, ("not_discardable", "directory_forbidden"))
+
+    def test_revert_no_commit_stages_inverse_change(self) -> None:
+        self._commit_file("r.txt", "old\n")
+        target = self._commit_file("r.txt", "new\n", "feat: 新版")
+        head = self._head()
+        res = GitService.revert(self.root, target["commit"], no_commit=True)
+        self.assertTrue(res["ok"], res)
+        self.assertEqual(self._head(), head)
+        self.assertEqual(_read(os.path.join(self.root, "r.txt")), b"old\n")
+        st = GitService.status(self.root, fresh=True)
+        self.assertEqual([item["path"] for item in st["staged"]], ["r.txt"])
+
+        # 还原会修改历史，必须记审计
+        events = GitService.audit_trail(self.root)["events"]
+        self.assertTrue(any(e.get("operation") == "revert" for e in events))
+
+    def test_revert_requires_clean_tree(self) -> None:
+        self._commit_file("r2.txt", "a\n")
+        _write(os.path.join(self.root, "r2.txt"), "dirty\n")
+        with self.assertRaises(GitError) as ctx:
+            GitService.revert(self.root, self._head())
+        self.assertEqual(ctx.exception.code, "dirty_worktree")
+        self.assertEqual(_read(os.path.join(self.root, "r2.txt")), b"dirty\n")
+
+    def test_remote_add_remove_and_reject_credentials(self) -> None:
+        url = "file:///" + self.extra.replace("\\", "/")
+        added = GitService.remote_add(self.root, "origin", url)
+        self.assertEqual(added["name"], "origin")
+        self.assertIn("origin", GitService.remotes(self.root)["remotes"])
+
+        with self.assertRaises(GitError) as ctx:
+            GitService.remote_add(self.root, "bad", "https://u:p@example.com/a.git")
+        self.assertEqual(ctx.exception.code, "url_has_credentials")
+
+        GitService.remote_remove(self.root, "origin")
+        self.assertNotIn("origin", GitService.remotes(self.root)["remotes"])
+
 
 if __name__ == "__main__":
     unittest.main()

@@ -147,3 +147,39 @@ def reset(handle: RepoHandle, mode: str = "mixed", ref: str = "HEAD",
     with handle.lock:
         dulwich.porcelain.reset(handle.repo, mode=mode, treeish=ref)
     return {"ok": True, "mode": mode, "ref": ref}
+
+
+def revert(handle: RepoHandle, committish: str, message: str = "",
+           no_commit: bool = False) -> dict[str, Any]:
+    """生成反向提交；三侧有未提交改动时拒绝，避免覆盖用户工作区。"""
+    if not committish:
+        raise GitError("bad_ref", "必须指定要还原的提交")
+    st = status(handle)
+    if st["conflicts"]:
+        raise GitError("merge_conflict", "存在未解决的冲突，先处理再还原")
+    if st["staged"] or st["changed"] or st["untracked"]:
+        raise GitError("dirty_worktree", "工作区有未提交修改，请先提交或暂存",
+                       staged=len(st["staged"]), changed=len(st["changed"]),
+                       untracked=len(st["untracked"]))
+    with handle.lock:
+        try:
+            sha = dulwich.porcelain.revert(
+                handle.repo, committish, no_commit=no_commit,
+                message=message or None, author=DEFAULT_AUTHOR,
+                committer=DEFAULT_AUTHOR)
+        except Exception as exc:  # noqa: BLE001
+            raise GitError("revert_failed", "还原失败: %s" % exc) from exc
+        if no_commit:
+            # no_commit 只写工作区；恢复删除的文件会表现为 untracked，
+            # 必须显式暂存，前端才能看到「已暂存的反向改动」。
+            after = status(handle)
+            targets = list(after["changed"]) + list(after["untracked"])
+            if targets:
+                handle.repo.get_worktree().stage(targets)
+        else:
+            # porcelain.revert 不刷新索引，不同步就会留下伪暂存差异。
+            handle.repo.get_worktree().reset_index(
+                config=handle.repo.get_config_stack())
+    head = head_sha(handle.repo)
+    return {"ok": True, "commit": sha.decode("ascii") if isinstance(sha, bytes) else str(sha or ""),
+            "head_sha": head.hex() if head else ""}

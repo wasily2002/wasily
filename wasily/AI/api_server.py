@@ -6126,6 +6126,35 @@ def _accept_changes(paths):
 
 
 # ============ HTTP 服务 ============
+class _HeadWfile:
+    """HEAD 响应专用的 wfile 包装器。
+
+    BaseHTTPRequestHandler 把状态行与响应头缓存在 _headers_buffer，直到 end_headers()
+    才一次性写入 wfile；之后响应体通过多次 wfile.write() 发送。本包装器透传首次写入
+    （即首部块）并 flush 到真实 socket，丢弃之后所有响应体写入，从而让 do_HEAD 复用
+    do_GET 的全部分发逻辑，又不会真正传输文件内容。
+    """
+
+    __slots__ = ("_real", "_headers_sent")
+
+    def __init__(self, real):
+        self._real = real
+        self._headers_sent = False
+
+    def write(self, data):
+        if not self._headers_sent:
+            self._headers_sent = True
+            return self._real.write(data)
+        # 丢弃响应体：返回写入字节数，避免调用方按短写处理
+        return len(data) if isinstance(data, (bytes, bytearray, memoryview)) else 0
+
+    def flush(self):
+        return self._real.flush()
+
+    def __getattr__(self, name):
+        return getattr(self._real, name)
+
+
 class APIHandler(BaseHTTPRequestHandler):
     def _set_headers(self, status=200, content_type="application/json"):
         self.send_response(status)
@@ -6237,6 +6266,21 @@ class APIHandler(BaseHTTPRequestHandler):
 
     def do_OPTIONS(self):
         self._set_headers()
+
+    def do_HEAD(self):
+        """HEAD 等价于 GET：返回相同的状态行与响应头，但不返回响应体。
+
+        供客户端探测资源元信息（存在性 / Content-Length / Content-Type /
+        Content-Disposition）而不必下载整个文件，例如浏览器与下载工具的预检。
+        实现上把 wfile 换成只透传首部的 _HeadWfile，再调用 do_GET 复用全部分发，
+        保证任意 GET 路由的 HEAD 行为与 GET 严格一致。
+        """
+        real_wfile = self.wfile
+        self.wfile = _HeadWfile(real_wfile)
+        try:
+            self.do_GET()
+        finally:
+            self.wfile = real_wfile
 
     def _serve_static(self, filename):
         fp = os.path.join(BASE_DIR, filename)
@@ -6381,6 +6425,22 @@ class APIHandler(BaseHTTPRequestHandler):
         except Exception as _file_exc:  # noqa: BLE001
             self._send_json(500, {"ok": False, "error": str(_file_exc)})
             return
+        # 跨页命令同步：SSE 事件流、历史与详情（实现见 command_api.py）
+        try:
+            import command_api
+            if command_api.handle_get(self, path, _urlparse(self.path).query):
+                return
+        except Exception as _cmd_exc:  # noqa: BLE001
+            self._send_json(500, {"ok": False, "error": str(_cmd_exc)})
+            return
+        # 跨端会话同步：对话/执行状态事件流与一致性核对（实现见 session_api.py）
+        try:
+            import session_api
+            if session_api.handle_get(self, path, _urlparse(self.path).query):
+                return
+        except Exception as _sync_exc:  # noqa: BLE001
+            self._send_json(500, {"ok": False, "error": str(_sync_exc)})
+            return
         # 第三方 MCP 接入：GET /mcp 返回服务描述，POST 走 JSON-RPC
         if path == "/mcp":
             import mcp_gateway
@@ -6522,7 +6582,14 @@ class APIHandler(BaseHTTPRequestHandler):
             if os.path.exists(chat_html):
                 self._set_headers(200, "text/html; charset=utf-8")
                 with open(chat_html, "r", encoding="utf-8") as f:
-                    self.wfile.write(f.read().encode("utf-8"))
+                    body = f.read()
+                # 注入跨端同步层：Agent 对话页与 IDE 面板共用同一条事件流
+                try:
+                    import session_api
+                    body = session_api.inject_dock(body)
+                except Exception as _sync_exc:  # noqa: BLE001
+                    log("[sync] 注入同步层失败: %s" % str(_sync_exc)[:120], "warning")
+                self.wfile.write(body.encode("utf-8"))
             else:
                 self._set_headers(404)
                 self.wfile.write(b"chat.html not found")
@@ -6531,7 +6598,14 @@ class APIHandler(BaseHTTPRequestHandler):
             if os.path.exists(agent_html):
                 self._set_headers(200, "text/html; charset=utf-8")
                 with open(agent_html, "r", encoding="utf-8") as f:
-                    self.wfile.write(f.read().encode("utf-8"))
+                    body = f.read()
+                # 注入跨页命令同步面板（与 IDE 面板同一份实现）
+                try:
+                    import command_api
+                    body = command_api.inject_dock(body)
+                except Exception as _cmd_exc:  # noqa: BLE001
+                    log("[commands] 注入同步面板失败: %s" % str(_cmd_exc)[:120], "warning")
+                self.wfile.write(body.encode("utf-8"))
             else:
                 self._set_headers(404)
                 self.wfile.write(b"agent/index.html not found")
@@ -7586,6 +7660,18 @@ class APIHandler(BaseHTTPRequestHandler):
                         json.dumps(_ui, ensure_ascii=False) + ";</script></head>", 1)
                 except Exception:
                     pass
+                # 注入跨页命令同步面板：与 Agent 窗口共用同一份实现
+                try:
+                    import command_api
+                    body = command_api.inject_dock(body)
+                except Exception as _cmd_exc:  # noqa: BLE001
+                    log("[commands] 注入同步面板失败: %s" % str(_cmd_exc)[:120], "warning")
+                # 注入跨端会话同步层：对话内容与执行状态和 Agent 页实时对齐
+                try:
+                    import session_api
+                    body = session_api.inject_dock(body)
+                except Exception as _sync_exc:  # noqa: BLE001
+                    log("[sync] 注入同步层失败: %s" % str(_sync_exc)[:120], "warning")
                 self._set_headers(200, "text/html; charset=utf-8")
                 self.wfile.write(body.encode("utf-8"))
             else:
@@ -8160,6 +8246,24 @@ class APIHandler(BaseHTTPRequestHandler):
                 return
         except Exception as _git_exc:  # noqa: BLE001
             self._send_json(500, {"ok": False, "error": str(_git_exc)})
+            return
+        # 跨页命令同步：启动 / 中断 / 镜像上报（实现见 command_api.py）
+        try:
+            import command_api
+            if command_api.handles_post(parsed_path) and \
+                    command_api.handle_post(self, parsed_path, self._read_json()):
+                return
+        except Exception as _cmd_exc:  # noqa: BLE001
+            self._send_json(500, {"ok": False, "error": str(_cmd_exc)})
+            return
+        # 跨端会话同步：IDE 执行/代码插入上报、一致性核对（实现见 session_api.py）
+        try:
+            import session_api
+            if session_api.handles_post(parsed_path) and \
+                    session_api.handle_post(self, parsed_path, self._read_json()):
+                return
+        except Exception as _sync_exc:  # noqa: BLE001
+            self._send_json(500, {"ok": False, "error": str(_sync_exc)})
             return
         # 第三方 MCP 接入：JSON-RPC 网关与注册/注销
         if parsed_path in ("/mcp", "/v1/mcp/register", "/v1/mcp/unregister"):
@@ -8768,6 +8872,11 @@ class APIHandler(BaseHTTPRequestHandler):
             stream_mode = bool(data.get("stream"))
 
             _user_text = user_messages[-1]["content"] if user_messages else ""
+            # 跨端同步：记录本轮来源与稳定消息 id。IDE 扩展带 client=ide，
+            # Agent 对话页带 sync_source=agent，两端据此跳过自己发起的事件。
+            _sync_source = str(data.get("sync_source") or
+                               ("ide" if str(data.get("client") or "").lower() == "ide" else "agent"))
+            _turn_mid = "a:" + uuid.uuid4().hex[:16]
             # ---- 模式自动升级：IDE 下 Ask/Plan 检测到动作意图 → 直接按 Agent(solo) 执行 ----
             # 根因：扩展默认走 Ask/Plan 时只给只读工具，任务一动手就零工具报错。
             # 这里在生成前收敛模式，保证「该动手时一定有写工具可用」。
@@ -8839,6 +8948,15 @@ class APIHandler(BaseHTTPRequestHandler):
                     session_messages = sessions[session_id]
                     session_messages.append({"role": "user", "content": _user_text})
             sess_clear_interrupted(session_id)   # 新一轮 → 断点视为已续跑
+            # 跨端同步：把本轮提问写入共享事件流。user_mid 幂等，重试/重生成不会插两条。
+            try:
+                import session_bus as _sb
+                _sb.seed(session_id, list(session_messages or []))
+                _sb.publish("user", session_id=session_id, source=_sync_source,
+                            msg_id=_sb.user_mid(session_id, str(_user_text or "")),
+                            content=str(_user_text or ""))
+            except Exception as _sync_err:  # noqa: BLE001
+                log(f"[sync] 发布用户消息失败: {_sync_err}", "warning")
 
             # 每轮按当前话题刷新系统提示词（含显式运行技能、命中技能与 Agent 绑定技能）
             matched_skills = []
@@ -9025,6 +9143,39 @@ class APIHandler(BaseHTTPRequestHandler):
                 except (BrokenPipeError, ConnectionResetError, OSError):
                     _sse_alive[0] = False   # 前端已断开，静默继续生成
 
+            # 跨端同步：增量 token 按 60ms 合批，避免每个 token 都占一个全局事件序号
+            _sync_buf = {"t": 0.0, "parts": []}
+
+            def _sync_flush():
+                try:
+                    chunk = "".join(_sync_buf["parts"])
+                    _sync_buf["parts"] = []
+                    if chunk:
+                        import session_bus as _sb
+                        _sb.publish("delta", session_id=session_id, source=_sync_source,
+                                    msg_id=_turn_mid, text=chunk)
+                except Exception:
+                    pass
+
+            def _sync_delta(text):
+                try:
+                    _sync_buf["parts"].append(str(text or ""))
+                    now = time.time()
+                    if now - _sync_buf["t"] >= 0.06:
+                        _sync_buf["t"] = now
+                        _sync_flush()
+                except Exception:
+                    pass
+
+            def _sync_stream_reset():
+                try:
+                    _sync_buf["parts"] = []
+                    import session_bus as _sb
+                    _sb.publish("stream_reset", session_id=session_id,
+                                source=_sync_source, msg_id=_turn_mid)
+                except Exception:
+                    pass
+
             _delta = _reset = _heartbeat = None
             if stream_mode:
                 self.send_response(200)
@@ -9034,8 +9185,8 @@ class APIHandler(BaseHTTPRequestHandler):
                 self.send_header("Access-Control-Allow-Origin", "*")
                 self.end_headers()
                 self.close_connection = True   # 事件流结束后立即关闭，避免客户端报 terminated
-                _delta = lambda t: _sse({"ev": "delta", "t": t})
-                _reset = lambda: _sse({"ev": "reset"})
+                _delta = lambda t: (_sse({"ev": "delta", "t": t}), _sync_delta(t))
+                _reset = lambda: (_sse({"ev": "reset"}), _sync_stream_reset())
                 _heartbeat = lambda: _sse({"ev": "heartbeat"})
             # 自动升级后立即通知面板切到 Agent，避免界面仍显示 Ask/Plan
             if stream_mode and _mode_escalated:
@@ -9534,6 +9685,7 @@ class APIHandler(BaseHTTPRequestHandler):
                     if _keep_steps:
                         session_messages[-1]["steps"] = _keep_steps
                     session_messages[-1]["elapsed"] = round(elapsed, 2)
+                    session_messages[-1]["mid"] = _turn_mid   # 与两端快照使用同一标识
                     if _agent_run:
                         session_messages[-1]["content"] = response_text
                         session_messages[-1]["agent_run"] = _agent_run
@@ -9593,6 +9745,18 @@ class APIHandler(BaseHTTPRequestHandler):
             result["diag"] = _diag
             if _agent_run:
                 result["agent_run"] = _agent_run
+            # 跨端同步：最终消息 + 思考轨迹。msg_id 稳定，重连重放不会渲染两遍。
+            try:
+                _sync_flush()   # 先把尚未合批的增量发完，保证「增量 → 定稿」顺序不乱
+                import session_bus as _sb
+                _sb.publish("assistant", session_id=session_id, source=_sync_source,
+                            msg_id=_turn_mid, content=str(response_text or ""),
+                            steps=steps or [], elapsed=round(elapsed, 2),
+                            agent_run=_agent_run,
+                            interrupted=str(_rt.get("last_finish") or "") == "cancelled")
+            except Exception as _sync_err:  # noqa: BLE001
+                log(f"[sync] 发布助手消息失败: {_sync_err}", "warning")
+            result["msg_id"] = _turn_mid
             if _discussion_result:
                 result["discussion_turn"] = _discussion_result
             if _diag["reply_len"] == 0 or _finish in ("empty_reply", "tool_rounds_exhausted", "think_deadline"):
@@ -9610,6 +9774,7 @@ class APIHandler(BaseHTTPRequestHandler):
                             "plan": plan_payload, "stage_plan": _stage_plan,
                             "used_tool": bool(used_tool),
                             "tool_name": tool_name, "diag": _diag,
+                            "msg_id": _turn_mid,
                             # 面板据此显示具体原因并启用「重试」；此前流式 done 不带 finish_reason，
                             # 前端只能落到兜底文案「可能被过滤或服务无响应」。
                             "finish_reason": _finish,
@@ -10328,6 +10493,12 @@ class APIHandler(BaseHTTPRequestHandler):
             with sessions_lock:
                 if session_id in sessions:
                     sessions[session_id] = [{"role": "system", "content": build_system_prompt()}]
+            # 跨端同步：清空要让对端也立即清屏，不能只清服务端内存
+            try:
+                import session_bus as _sb
+                _sb.publish("session_clear", session_id=session_id, source="server")
+            except Exception as _sync_err:  # noqa: BLE001
+                log(f"[sync] 发布清空事件失败: {_sync_err}", "warning")
             self._set_headers()
             self.wfile.write(json.dumps({"status": "cleared", "session_id": session_id}).encode())
 
