@@ -767,6 +767,50 @@
   .confirm-card button:disabled { opacity: 0.5; cursor: not-allowed; }
   .confirm-card .c-state { font-size: 12px; color: #858585; margin-top: 8px; text-align: center; }
 
+  /* ============ Agent 提问卡片（执行中暂停等用户作答） ============ */
+  .question-card {
+    max-width: 75%;
+    background: #252526;
+    border: 1px solid rgba(88,166,255,0.45);
+    border-radius: 10px;
+    padding: 12px 16px;
+    margin-bottom: 16px;
+    box-shadow: 0 4px 20px rgba(0,0,0,0.4);
+  }
+  .question-card .q-title {
+    font-size: 13px; font-weight: 600; color: #58a6ff;
+    display: flex; align-items: center; gap: 7px;
+  }
+  .question-card .q-text {
+    font-size: 13px; color: #e6e6e6; margin-top: 8px;
+    line-height: 1.6; white-space: pre-wrap; word-break: break-word;
+  }
+  .question-card .q-opts { display: flex; flex-direction: column; gap: 8px; margin-top: 10px; }
+  .question-card .q-opt {
+    text-align: left; padding: 9px 11px; border-radius: 8px; cursor: pointer;
+    background: #1b1b1c; border: 1px solid #3c3c3c; color: #d4d4d4;
+    font-size: 12.5px; line-height: 1.5; transition: border-color .15s, background .15s;
+  }
+  .question-card .q-opt:hover { border-color: #58a6ff; }
+  .question-card .q-opt.sel { border-color: #58a6ff; background: rgba(88,166,255,0.12); color: #fff; }
+  .question-card .q-opt .q-desc { display: block; color: #8b949e; font-size: 11.5px; margin-top: 3px; }
+  .question-card .q-custom {
+    width: 100%; box-sizing: border-box; margin-top: 10px; padding: 8px 10px;
+    background: #1b1b1c; border: 1px solid #3c3c3c; border-radius: 8px;
+    color: #e6e6e6; font-size: 12.5px; resize: vertical; min-height: 34px;
+  }
+  .question-card .q-custom:focus { outline: none; border-color: #58a6ff; }
+  .question-card .q-btns { display: flex; gap: 10px; margin-top: 12px; }
+  .question-card .q-btns button {
+    flex: 1; height: 34px; border-radius: 6px; border: none;
+    font-size: 13px; font-weight: 600; cursor: pointer; color: #fff;
+  }
+  .question-card .q-send { background: #238636; }
+  .question-card .q-send:hover { background: #2ea043; }
+  .question-card .q-cancel { background: #3c3c3c; }
+  .question-card .q-btns button:disabled { opacity: 0.5; cursor: not-allowed; }
+  .question-card .q-state { font-size: 12px; color: #858585; margin-top: 8px; text-align: center; }
+
   /* ============ 开发计划卡片（工程开发智能体：计划先行 → 确认执行） ============ */
   .plan-card {
     max-width: 85%;
@@ -1328,6 +1372,7 @@
     #historyDrawer { width: 100vw; max-width: 100vw; right: -100vw; }
     .modal { width: 94vw; }
     .confirm-card { max-width: 94%; }
+    .question-card { max-width: 94%; }
   }
 
   /* Agent 独立窗口只嵌入对话本体，导航与助手信息由外层统一呈现。 */
@@ -3324,6 +3369,7 @@ micBtn.addEventListener('click', toggleRecord);
 
 /* ============ 工具确认卡片（轮询 /agent_status 发现待批准操作） ============ */
 let shownActionId = null;
+let shownQuestionId = null;
 
 // 轮询共享退避 + 单飞保护：服务不可达时全局降速，避免请求堆积耗尽连接池
 let _pollBackoff = 0, _pollFails = 0;
@@ -3336,7 +3382,7 @@ async function pollStatus() {
   if (!_pollInflight.has('status')) {
     _pollInflight.add('status');
     try {
-      const res = await fetch('/agent_status');
+      const res = await fetch('/agent_status?session_id=' + encodeURIComponent(sessionId || ''));
       const st = await res.json();
       // 自愈：本页没有在生成，但全局状态仍是 thinking 且迟迟不更新（后端异常分支漏复位），
       // 直接当作已完成，避免任务条永久卡在「思考中」，挡住下一轮输入
@@ -3349,6 +3395,9 @@ async function pollStatus() {
       const pa = st.pending_action;
       if (pa && pa.id !== shownActionId) { shownActionId = pa.id; addConfirmCard(pa); }
       else if (!pa) { shownActionId = null; }
+      const pq = st.pending_question;
+      if (pq && pq.id !== shownQuestionId) { shownQuestionId = pq.id; addQuestionCard(pq); }
+      else if (!pq) { shownQuestionId = null; }
       pollOk();
       fetchTokenStats();
       next = 1500;
@@ -3421,6 +3470,79 @@ function addConfirmCard(pa) {
   };
   allowBtn.onclick = () => decide(true);
   denyBtn.onclick = () => decide(false);
+  chat.appendChild(card);
+  chat.scrollTop = chat.scrollHeight;
+}
+
+/* Agent 主动提问卡片：选项点选（支持多选）+ 可选补充文本，提交后回传 /user/answer */
+function addQuestionCard(pq) {
+  const h = (s) => String(s == null ? '' : s)
+    .replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;')
+    .replace(/"/g, '&quot;');
+  const opts = pq.options || [];
+  const multi = !!pq.multi_select;
+  const allowCustom = pq.allow_custom !== false;
+  const card = document.createElement('div');
+  card.className = 'question-card';
+  card.innerHTML =
+    `<div class="q-title">❓ AI 需要你确认</div>
+     <div class="q-text">${h(pq.question)}</div>
+     <div class="q-opts">${opts.map((o, i) =>
+       `<button class="q-opt" type="button" data-i="${i}">${h(o.label)}` +
+       (o.description ? `<span class="q-desc">${h(o.description)}</span>` : '') +
+       `</button>`).join('')}</div>` +
+     (allowCustom ? '<textarea class="q-custom" placeholder="补充说明（可选）"></textarea>' : '') +
+     `<div class="q-btns">
+        <button class="q-send" type="button">提交</button>
+        <button class="q-cancel" type="button">取消</button>
+      </div>
+      <div class="q-state" style="display:none"></div>`;
+  const optBtns = Array.from(card.querySelectorAll('.q-opt'));
+  const picked = [];
+  optBtns.forEach((btn) => {
+    btn.onclick = () => {
+      const label = opts[+btn.dataset.i].label;
+      const at = picked.indexOf(label);
+      if (multi) {
+        if (at >= 0) { picked.splice(at, 1); btn.classList.remove('sel'); }
+        else { picked.push(label); btn.classList.add('sel'); }
+      } else {
+        picked.length = 0;
+        optBtns.forEach((b) => b.classList.remove('sel'));
+        picked.push(label);
+        btn.classList.add('sel');
+      }
+    };
+  });
+  const sendBtn = card.querySelector('.q-send');
+  const cancelBtn = card.querySelector('.q-cancel');
+  const state = card.querySelector('.q-state');
+  const submit = async (payload, okText) => {
+    sendBtn.disabled = cancelBtn.disabled = true;
+    optBtns.forEach((b) => { b.disabled = true; });
+    state.style.display = 'block';
+    state.textContent = '提交中…';
+    try {
+      const res = await fetch('/user/answer', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(Object.assign({ action_id: pq.id }, payload))
+      });
+      const r = await res.json();
+      state.textContent = r.ok ? okText : ('提交失败：' + (r.error || ''));
+      if (!r.ok) { sendBtn.disabled = cancelBtn.disabled = false; }
+    } catch (e) {
+      state.textContent = '提交失败：' + e.message;
+      sendBtn.disabled = cancelBtn.disabled = false;
+    }
+  };
+  sendBtn.onclick = () => {
+    const box = card.querySelector('.q-custom');
+    const custom = box ? box.value.trim() : '';
+    if (!picked.length && !custom) { state.style.display = 'block'; state.textContent = '请选择一个选项或填写补充说明'; return; }
+    submit({ answers: picked.slice(), custom }, '已提交，AI 继续执行…');
+  };
+  cancelBtn.onclick = () => submit({ cancel: true }, '已取消，AI 将自行收尾');
   chat.appendChild(card);
   chat.scrollTop = chat.scrollHeight;
 }

@@ -813,6 +813,17 @@ class _FakeLlama:
                     ensure_ascii=False) + "\n```")
             else:
                 text = "已按驳回提示补空调用 JSON，完成读取。"
+        elif "[[TEST_ASK]]" in _tail:
+            # 验证 ask_user 全链路：第一轮发提问工具，拿到工具结果后按答案收尾
+            if done_rounds < 1:
+                text = ("需要你拍板后我再动手。\n```tool_call\n" + json.dumps(
+                    {"name": "ask_user",
+                     "parameters": {"question": "选哪个方案？",
+                                    "options": ["A方案", "B方案"], "timeout": 60}},
+                    ensure_ascii=False) + "\n```")
+            else:
+                text = ("已收到用户答案：" +
+                        ("A方案" if "A方案" in _tail else "（未拿到答案）") + "，继续执行。")
         elif done_rounds < rounds:
             _args = {"path": os.path.join(BASE_DIR, "config.json"),
                      "offset": done_rounds * 10, "limit": 10}
@@ -4798,7 +4809,7 @@ def generate_with_tools(messages, max_tokens=MAX_GENERATE_TOKENS, temperature=0.
 
         # ===== 防重复调用拦截：同一工具+参数已成功执行过 → 不再执行，强令基于已有结果收尾 =====
         _call_key = tool_name + "|" + json.dumps(tool_args, sort_keys=True, ensure_ascii=False)
-        if _call_key in seen_calls:
+        if tool_name != "ask_user" and _call_key in seen_calls:
             dup_repeats += 1
             log(f"[拦截] 重复调用 {tool_name} 被跳过（第{dup_repeats}次）", "warning")
             _tool_event("tool_result", round=round_i + 1, tool=tool_name,
@@ -5115,8 +5126,9 @@ def _run_plan(plan_id, wait_slot=0.0):
         print("[history] 计划记录失败:", e, flush=True)
 
 
-# ============ 工具执行确认（敏感操作需用户在窗口批准） ============
-PENDING_ACTIONS = {}                      # action_id -> {tool,args,event,allowed,ts}
+# ============ 用户交互（敏感操作审批 / Agent 主动提问，同一张挂起表） ============
+# action_id -> {kind: tool_approval|user_question, event, allowed/result, ts, session_id}
+PENDING_ACTIONS = {}
 _pending_lock = threading.Lock()
 
 _CONFIRM_CMDS = ("pip install", "pip uninstall", "npm install", "winget install",
@@ -5339,27 +5351,152 @@ def needs_confirm(tool_name, tool_args):
     return False
 
 
+def _interaction_create(kind, payload, session_id=""):
+    """统一创建一条挂起交互（审批/提问共用同一张表与同一种唤醒机制）"""
+    iid = uuid.uuid4().hex[:12]
+    rec = {"id": iid, "kind": kind, "event": threading.Event(),
+           "resolved": False, "ts": time.time(),
+           "session_id": session_id or str(_CUR_SESSION.get("sid") or "")}
+    rec.update(payload)
+    with _pending_lock:
+        PENDING_ACTIONS[iid] = rec
+    return rec
+
+
+def _interaction_resolve(iid, data):
+    """回填答案/决定并唤醒等待线程；不存在或已处理返回 None"""
+    with _pending_lock:
+        rec = PENDING_ACTIONS.get(iid)
+        if rec is None or rec.get("resolved"):
+            return None
+        rec["resolved"] = True
+        if rec.get("kind") == "tool_approval":
+            rec["allowed"] = bool(data.get("allow"))
+        else:
+            ans = data.get("answers")
+            rec["result"] = {"answers": ans if isinstance(ans, list) else [],
+                             "custom": str(data.get("custom") or ""),
+                             "cancel": bool(data.get("cancel"))}
+        rec["event"].set()
+        return rec
+
+
+def _interaction_finish(rec):
+    with _pending_lock:
+        PENDING_ACTIONS.pop(rec.get("id"), None)
+    if (AGENT_STATE.get("pending_action") or {}).get("id") == rec.get("id"):
+        AGENT_STATE.pop("pending_action", None)
+
+
 def wait_user_confirm(tool_name, tool_args):
     """挂起等待用户批准（对话窗口轮询 /agent_status 发现卡片）。
     返回 (allowed, action_id)；超时视为拒绝"""
     timeout = int(_cfg.get("install_tool.confirm_timeout", 180))
-    aid = uuid.uuid4().hex[:12]
-    ev = threading.Event()
-    _sid_now = str(_CUR_SESSION.get("sid") or "")
-    with _pending_lock:
-        PENDING_ACTIONS[aid] = {"tool": tool_name, "args": tool_args,
-                                "event": ev, "allowed": None, "ts": time.time(),
-                                "session_id": _sid_now}
+    sid = str(_CUR_SESSION.get("sid") or "")
+    rec = _interaction_create("tool_approval", {"tool": tool_name, "args": tool_args}, sid)
     # 全局展示镜像可能被另一会话覆盖，但记录本身带 session_id，清空时只清自己的
-    AGENT_STATE["pending_action"] = {"id": aid, "tool": tool_name,
-                                     "args": tool_args, "ts": time.time(),
-                                     "session_id": _sid_now}
-    allowed = ev.wait(timeout=timeout)
+    AGENT_STATE["pending_action"] = {"id": rec["id"], "tool": tool_name,
+                                     "args": tool_args, "ts": rec["ts"],
+                                     "session_id": sid}
+    rec["event"].wait(timeout=timeout)
+    allowed = bool(rec.get("allowed"))
+    _interaction_finish(rec)
+    return allowed, rec["id"]
+
+
+def _normalize_options(options):
+    """把模型给的选择项归一成 [{label, description}]，容忍字符串数组与自由格式。"""
+    out = []
+    for item in (options or []):
+        if isinstance(item, dict):
+            label = str(item.get("label") or item.get("value") or "").strip()
+            desc = str(item.get("description") or "").strip()
+        else:
+            label, desc = str(item or "").strip(), ""
+        if label:
+            out.append({"label": label, "description": desc})
+    return out[:8]
+
+
+def wait_user_question(question, options=None, multi_select=False,
+                       allow_custom=True, timeout=None, session_id=""):
+    """Agent 主动提问：挂起当前工具调用等用户作答。
+    结果三态：作答 / 用户取消 / 超时（超时后由模型自行收尾，系统不代选默认项）。
+    该记录按 session_id 归属，前端按会话取，避免多会话互相覆盖。"""
+    qid = uuid.uuid4().hex[:12]
+    ev = threading.Event()
+    sid = str(session_id or _CUR_SESSION.get("sid") or "")
+    rec = {
+        "kind": "user_question",
+        "question": str(question or "").strip(),
+        "options": _normalize_options(options),
+        "multi_select": bool(multi_select),
+        "allow_custom": bool(allow_custom),
+        "event": ev, "result": None, "ts": time.time(), "session_id": sid,
+    }
     with _pending_lock:
-        PENDING_ACTIONS.pop(aid, None)
-    if (AGENT_STATE.get("pending_action") or {}).get("id") == aid:
-        AGENT_STATE.pop("pending_action", None)
-    return bool(allowed), aid
+        PENDING_ACTIONS[qid] = rec
+    try:
+        timeout = int(timeout if timeout is not None
+                      else _cfg.get("ask_user.timeout", 600))
+    except Exception:
+        timeout = 600
+    ev.wait(timeout=max(30, timeout))
+    with _pending_lock:
+        rec = PENDING_ACTIONS.pop(qid, None) or rec
+    result = rec.get("result") or {}
+    if result.get("cancel"):
+        return {"ok": False, "cancelled": True,
+                "error": "用户取消了这次提问；请不要再重复追问，直接收尾并说明"}
+    if not result.get("answers") and not result.get("custom"):
+        return {"ok": False, "timeout": True,
+                "error": "用户未在时限内作答；请自行决定继续或结束，并在回复里说明该决定"}
+    return {"ok": True, "answers": result.get("answers") or [],
+            "custom": str(result.get("custom") or "")}
+
+
+def _ask_user_tool(question, options=None, multi_select=False, allow_custom=True,
+                   timeout=600):
+    """ask_user 工具入口：工具结果必须是字符串，超时/取消信息交给模型自行收尾。"""
+    if isinstance(options, str):
+        try:
+            options = json.loads(options)
+        except Exception:
+            options = [options]
+    return json.dumps(wait_user_question(question, options, multi_select, allow_custom,
+                                         timeout=timeout), ensure_ascii=False)
+
+
+TOOLS["ask_user"] = {
+    "description": "在关键决策点暂停并向用户提问（可给选项点选，也可自由输入）；"
+                   "适合方案取舍、需求不明确、执行前需用户拍板的场景",
+    "parameters": {"question": "要问用户的问题",
+                   "options": "选项列表：字符串数组或 {label,description} 数组（最多8项）",
+                   "multi_select": "是否允许多选(true/false,可选)",
+                   "allow_custom": "是否允许自由输入(true/false,可选)",
+                   "timeout": "等待用户作答的秒数(可选,默认600)"},
+    "function": _ask_user_tool,
+}
+
+
+def _pending_views(sid):
+    """取某会话当前的挂起交互（不含全局镜像），供 /agent_status 按会话返回。"""
+    action = question = None
+    with _pending_lock:
+        for aid, rec in PENDING_ACTIONS.items():
+            if str(rec.get("session_id") or "") != str(sid):
+                continue
+            if rec.get("kind") == "user_question":
+                if question is None:
+                    question = {"id": aid, "question": rec.get("question", ""),
+                                "options": rec.get("options", []),
+                                "multi_select": bool(rec.get("multi_select")),
+                                "allow_custom": bool(rec.get("allow_custom")),
+                                "ts": rec.get("ts")}
+            elif rec.get("kind") == "tool_approval" and action is None:
+                action = {"id": aid, "tool": rec.get("tool"), "args": rec.get("args"),
+                          "ts": rec.get("ts")}
+    return action, question
 
 
 # ============ Agent 中心（agent/ 目录：插件市场之外的助理/自动化/模板/产物） ============
@@ -7607,9 +7744,43 @@ class APIHandler(BaseHTTPRequestHandler):
         elif path == "/agent_status":
             self._set_headers()
             from resource_manager import get_resource_state
+            from urllib.parse import parse_qs as _pqs_ag
             payload = dict(AGENT_STATE)
             payload["resource"] = get_resource_state()
+            # 挂起交互按会话归属：并发会话下全局 AGENT_STATE 会被最后活跃会话覆盖，
+            # 前端带 session_id 查询时以 PENDING_ACTIONS 的记录为准。
+            _sid_ag = (_pqs_ag(_urlparse(self.path).query).get("session_id") or [""])[0].strip()
+            _pa_ag, _pq_ag = _pending_views(_sid_ag)
+            if _sid_ag:
+                if _pa_ag:
+                    payload["pending_action"] = _pa_ag
+                else:
+                    payload.pop("pending_action", None)
+            if _pq_ag:
+                payload["pending_question"] = _pq_ag
+                payload["pending_interaction"] = dict(_pq_ag, kind="user_question")
+            elif _pa_ag:
+                payload["pending_interaction"] = dict(_pa_ag, kind="tool_approval")
+            elif not _sid_ag:
+                with _pending_lock:
+                    for _aid_ag, _rec_ag in PENDING_ACTIONS.items():
+                        if _rec_ag.get("kind") == "user_question":
+                            payload["pending_question"] = {
+                                "id": _aid_ag,
+                                "question": _rec_ag.get("question", ""),
+                                "options": _rec_ag.get("options", []),
+                                "multi_select": bool(_rec_ag.get("multi_select")),
+                                "allow_custom": bool(_rec_ag.get("allow_custom")),
+                                "session_id": _rec_ag.get("session_id", ""),
+                            }
+                            break
             self.wfile.write(json.dumps(payload, ensure_ascii=False).encode())
+        elif path == "/interaction/pending":
+            # 挂起交互统一读取：?session_id=x → 该会话当前待审批/待作答（无则 null）
+            from urllib.parse import parse_qs as _pqs_ip
+            _sid_ip = (_pqs_ip(_urlparse(self.path).query).get("session_id") or [""])[0].strip()
+            _act_ip, _q_ip = _pending_views(_sid_ip)
+            self._send_json(200, {"ok": True, "action": _act_ip, "question": _q_ip})
         elif path == "/plan/status":
             # 开发计划轮询：?id=<plan_id> → 计划全量状态（含各步骤进度与总结）
             from urllib.parse import parse_qs
@@ -8951,7 +9122,11 @@ class APIHandler(BaseHTTPRequestHandler):
             # 跨端同步：把本轮提问写入共享事件流。user_mid 幂等，重试/重生成不会插两条。
             try:
                 import session_bus as _sb
-                _sb.seed(session_id, list(session_messages or []))
+                _hist_for_seed = list(session_messages or [])
+                # 本轮用户消息由下面的 publish 负责，seed 只灌入它之前的历史，避免同一条重复
+                if _hist_for_seed and _hist_for_seed[-1].get("role") == "user":
+                    _hist_for_seed = _hist_for_seed[:-1]
+                _sb.seed(session_id, _hist_for_seed)
                 _sb.publish("user", session_id=session_id, source=_sync_source,
                             msg_id=_sb.user_mid(session_id, str(_user_text or "")),
                             content=str(_user_text or ""))
@@ -11396,15 +11571,70 @@ class APIHandler(BaseHTTPRequestHandler):
             allow = bool(data.get("allow"))
             with _pending_lock:
                 rec = PENDING_ACTIONS.get(aid)
-                if rec is not None:
+                # 只处理审批记录；提问记录走 /user/answer，避免串类型
+                if rec is not None and rec.get("kind") != "user_question":
                     rec["allowed"] = allow
                     rec["event"].set()
+                else:
+                    rec = None
             self._set_headers()
             if rec is None:
                 self.wfile.write(json.dumps(
                     {"ok": False, "error": "确认请求不存在或已过期"}).encode())
             else:
                 self.wfile.write(json.dumps({"ok": True, "allowed": allow}).encode())
+
+        elif parsed_path == "/interaction/respond":
+            # 统一作答入口（规范名）：审批传 allow，提问传 answers/custom/cancel
+            data = self._read_json()
+            iid = str(data.get("interaction_id") or data.get("action_id") or "")
+            with _pending_lock:
+                rec = PENDING_ACTIONS.get(iid)
+                if rec is not None:
+                    if rec.get("kind") == "user_question":
+                        answers = data.get("answers")
+                        if isinstance(answers, str):
+                            answers = [answers]
+                        rec["result"] = {"answers": [str(a) for a in answers]
+                                         if isinstance(answers, list) else [],
+                                         "custom": str(data.get("custom") or "").strip(),
+                                         "cancel": bool(data.get("cancel"))}
+                    else:
+                        rec["allowed"] = bool(data.get("allow"))
+                    rec["event"].set()
+                else:
+                    rec = None
+            self._set_headers()
+            if rec is None:
+                self.wfile.write(json.dumps(
+                    {"ok": False, "error": "交互不存在或已处理"}).encode())
+            else:
+                self.wfile.write(json.dumps({"ok": True}).encode())
+
+        elif parsed_path == "/user/answer":
+            # Agent 主动提问的作答回传：{action_id, answers:[label...], custom, cancel}
+            data = self._read_json()
+            qid = str(data.get("action_id") or data.get("question_id") or "")
+            cancel = bool(data.get("cancel"))
+            answers = data.get("answers")
+            if isinstance(answers, str):
+                answers = [answers]
+            answers = [str(a) for a in answers] if isinstance(answers, list) else []
+            custom = str(data.get("custom") or "").strip()
+            with _pending_lock:
+                rec = PENDING_ACTIONS.get(qid)
+                if rec is not None and rec.get("kind") == "user_question":
+                    rec["result"] = {"answers": answers, "custom": custom,
+                                     "cancel": cancel}
+                    rec["event"].set()
+                else:
+                    rec = None
+            self._set_headers()
+            if rec is None:
+                self.wfile.write(json.dumps(
+                    {"ok": False, "error": "提问不存在或已过期"}).encode())
+            else:
+                self.wfile.write(json.dumps({"ok": True}).encode())
 
         elif parsed_path == "/api/docs":
             # 保存文档 JSON：先写临时文件再替换，并保留 .bak 备份
@@ -12199,6 +12429,12 @@ class APIHandler(BaseHTTPRequestHandler):
 
 if __name__ == "__main__":
     apply_network_proxy()   # 启动参数：按配置注入代理环境变量
+    # 跨端同步：把已落盘的会话历史注册给总线，服务重启后两端仍能看到同一份上下文
+    try:
+        import session_bus as _sync_bus
+        _sync_bus.set_provider(_sess_snapshot)
+    except Exception as _sync_err:  # noqa: BLE001
+        log(f"[sync] 注册会话历史提供者失败: {_sync_err}", "warning")
     from resource_manager import start_resource_manager
     start_resource_manager(lambda: AGENT_STATE)
     memory_net.start_reconcile()       # 后台补齐旧长期记忆的向量索引

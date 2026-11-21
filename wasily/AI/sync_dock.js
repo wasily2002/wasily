@@ -80,7 +80,8 @@
   function agentAssistant(m) {
     if (!window.addMsg) return;
     if (m.mid && midNodes[m.mid]) return;
-    if (alreadyHas('assistant', m.content)) { if (m.mid) seen[m.mid] = 1; return; }
+    if (alreadyHas('assistant', m.content)) { if (m.mid) seen[m.mid] = 1; dropStream(m.mid); return; }
+    dropStream(m.mid);   // 定稿接管临时流式气泡
     var steps = m.steps || [];
     var toolInfo = null;
     if (steps.length) {
@@ -96,7 +97,6 @@
     }));
     if (node && m.mid) { node.setAttribute('data-mid', m.mid); midNodes[m.mid] = node; }
     if (m.mid) seen[m.mid] = 1;
-    dropStream(m.mid);
   }
 
   function agentDelta(m) {
@@ -178,14 +178,17 @@
     if (ev.session_id && ev.session_id !== SID) return;   // 别的会话，不串台
     var fromSelf = (ev.source === PAGE);
     if (ev.type === 'user') {
+      if (!SID) return;                  // 尚未确定会话：宁可不渲染，也不串台
       if (!fromSelf) (PAGE === 'ide' ? ideUser : agentUser)(ev);
       return;
     }
     if (ev.type === 'delta') {
+      if (!SID) return;
       if (!fromSelf) (PAGE === 'ide' ? ideDelta : agentDelta)(ev);
       return;
     }
     if (ev.type === 'assistant') {
+      if (!SID) return;
       if (!fromSelf) (PAGE === 'ide' ? ideAssistant : agentAssistant)(ev);
       return;
     }
@@ -325,4 +328,10 @@
   var lastSid = SID;
   setInterval(function () {
     var now = readSid();
-    if (now && now !== lastSid)
+    if (now && now !== lastSid) { lastSid = now; setSid(now); }
+    if (ready && Date.now() - lastVerify > 20000) { lastVerify = Date.now(); verify(true); }
+  }, 2500);
+
+  fetchBase();
+  connectCommands();
+})();

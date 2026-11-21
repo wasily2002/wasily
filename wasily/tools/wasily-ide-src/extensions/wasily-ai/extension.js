@@ -180,7 +180,8 @@ async function callAI(messages, maxTokens, options) {
             max_tokens: maxTokens || 2048,
             // 多轮工具循环：思考→执行→再思考→…→task_done，IDE 模式也给足轮数（上限 8）
             max_tool_rounds: 8,
-            model: options.modelId || defaultModel
+            model: options.modelId || defaultModel,
+            client: 'ide'   // 跨端同步：标记来源，Agent 页据此区分并跳过自身事件
         }),
         signal: options.signal
     });
@@ -334,6 +335,19 @@ function stripFences(text) {
     return t.trim();
 }
 
+// 跨端同步：把 IDE 内的代码写入/终端执行回传给 Agent 页；通道不可用时静默，不影响主流程
+function syncReport(kind, detail, filePath, extra) {
+    try {
+        fetch(getServerUrl() + '/v1/sync/report', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify(Object.assign({
+                kind: kind, detail: detail || '', path: filePath || '', source: 'ide'
+            }, extra || {}))
+        }).catch(function () { });
+    } catch (e) { /* 同步失败不阻断用户操作 */ }
+}
+
 async function insertTextIntoEditor(text) {
     const editor = vscode.window.activeTextEditor;
     if (!editor) {
@@ -345,6 +359,8 @@ async function insertTextIntoEditor(text) {
             edit.insert(selection.active, text);
         }
     });
+    syncReport('code_insert', '已向编辑器插入代码', editor.document && editor.document.uri
+        ? editor.document.uri.fsPath : '');
 }
 
 // 取当前活动编辑器的选区文本（没选区返回空串）
@@ -365,6 +381,8 @@ async function runShellCommand(code) {
         // PowerShell 兼容：多命令用分号或换行分隔
         term.sendText(code, true);   // addNewLine=true
         vscode.window.setStatusBarMessage('▶ 已在终端执行命令', 2500);
+        // 跨端同步：命令状态与输出由 /v1/commands/ingest 逐行镜像，这里补一条动作事件
+        syncReport('terminal', '已在 IDE 终端执行命令', '', { command: code });
     } catch (e) {
         vscode.window.showErrorMessage('无法打开终端：' + (e && e.message ? e.message : String(e)));
     }
@@ -1608,6 +1626,7 @@ class ChatProvider {
                     const doc = await vscode.workspace.openTextDocument(target);
                     await vscode.window.showTextDocument(doc, { preview: true });
                     this.post({ type: 'notify', message: '已新建文件：' + target.fsPath });
+                    syncReport('file_change', '已新建文件', target.fsPath);
                 }
                 break;
             }
@@ -2394,8 +2413,30 @@ class ChatProvider {
                 '\n以上片段来自工作区关键词检索，请结合这些上下文回答。\n\n' + finalPrompt;
         }
 
-        sess.messages.push({ role: 'user', content: finalPrompt, display: text, ref: ref });
-        // 会话名 = 首条消息前 12 字
+        // 跨端同步：发送前把服务端共享会话中缺失的消息并入本地历史，
+        // 否则 Agent 页刚产生的上下文在 IDE 侧发下一轮时会被丢掉。
+        try {
+            const _sid = this.currentSessionId();
+            const _snap = await fetch(getServerUrl() + '/v1/sync/snapshot?session_id=' +
+                encodeURIComponent(_sid), { cache: 'no-store' }).then((r) => r.json());
+            if (_snap && _snap.ok && Array.isArray(_snap.messages) && _snap.messages.length) {
+                const _known = new Set(sess.messages
+                    .filter((m) => m.role === 'user' || m.role === 'assistant')
+                    .map((m) => m.role + '\n' + String(m.content || '')));
+                _snap.messages.forEach((m) => {
+                    if (m.role !== 'user' && m.role !== 'assistant') return;
+                    const key = m.role + '\n' + String(m.content || '');
+                    if (_known.has(key)) return;
+                    _known.add(key);
+                    sess.messages.push({ role: m.role, content: m.content || '',
+                        steps: m.steps || [], ms: m.elapsed ? Math.round(Number(m.elapsed) * 1000) : 0,
+                        msgId: m.mid || '' });
+                });
+                saveState(this.context, state);
+            }
+        } catch (e) { /* 同步失败不阻断发送，服务端仍有一份完整历史 */ }
+
+        sess.messages.push({ role: 'user', content: finalPrompt, display: text, ref: ref });        // 会话名 = 首条消息前 12 字
         if (sess.name === '新会话') {
             sess.name = text.replace(/\s+/g, ' ').slice(0, 12) || '新会话';
         }
@@ -2497,7 +2538,13 @@ class ChatProvider {
             saveState(this.context, state);
             // 把服务端 steps（think/tool 交替轨迹）随回复下发，供面板渲染「思考→执行→检测」折叠流
             this.post({ type: 'append', role: 'assistant', content: reply, done: true, sid: sess.id,
-                        steps: replySteps, ms: replyMs, agentRun: agentRun, index: sess.messages.length - 1 });
+                        steps: replySteps, ms: replyMs, agentRun: agentRun, index: sess.messages.length - 1,
+                        msgId: (data && data.msg_id) || '' });
+            // 跨端同步：本端消息 id 同步给面板，便于一致性核对与去重
+            if (data && data.msg_id) {
+                sess.messages[sess.messages.length - 1].msgId = data.msg_id;
+                saveState(this.context, state);
+            }
             // 计划卡兜底：实时 stage_plan 事件丢失时用 done 里的计划补发（面板按 id 去重）
             if (stagePlan) this.post({ type: 'planStage', plan: stagePlan, sid: sess.id });
             // 任务编排卡片：服务端把多步需求拆成「人物 + 任务 + agent/skill + 工具」，这里下发给面板渲染
@@ -2725,7 +2772,10 @@ class ChatProvider {
         const ctrl = new AbortController();
         const timer = setTimeout(() => ctrl.abort(), 1000);
         try {
-            const res = await fetch(getServerUrl() + '/agent_status', { signal: ctrl.signal });
+            const _pstate = loadState(this.context);
+            const _psid = (_pstate && _pstate.activeId) || '';
+            const res = await fetch(getServerUrl() + '/agent_status?session_id=' +
+                encodeURIComponent(_psid), { signal: ctrl.signal });
             if (res.ok) {
                 const data = await res.json();
                 const phase = (data && data.phase) || 'idle';
@@ -2747,6 +2797,24 @@ class ChatProvider {
                                           summary: '需要确认：' + String(data.pending_action.tool || '敏感操作'),
                                           ms: Date.now() - (this._genStartTs || Date.now()) });
                     }
+                }
+                // Agent 主动提问：挂起等用户作答 → 面板渲染提问卡片
+                if (data && data.pending_question && data.pending_question.id !== this._lastQuestionNotifyId) {
+                    this._lastQuestionNotifyId = data.pending_question.id;
+                    this.post({
+                        type: 'pendingQuestion',
+                        id: data.pending_question.id,
+                        question: data.pending_question.question || '',
+                        options: data.pending_question.options || [],
+                        multi_select: !!data.pending_question.multi_select,
+                        allow_custom: data.pending_question.allow_custom !== false
+                    });
+                    const st2 = loadState(this.context);
+                    const sess2 = st2.sessions.find((s) => s.id === st2.activeId);
+                    this.notifyTask({ state: 'confirm', sid: st2.activeId || '',
+                                      title: sess2 ? sess2.name : '',
+                                      summary: '需要作答：' + String(data.pending_question.question || ''),
+                                      ms: Date.now() - (this._genStartTs || Date.now()) });
                 }
                 if (phase === 'idle') this.stopPhasePolling(); // 服务端已空闲，停止轮询
             }
@@ -5876,3 +5944,11 @@ window.addEventListener('resize', () => {
     simulation.force('center', d3.forceCenter(w / 2, h / 2));
     simulation.alpha(0.3).restart();
 });
+</script>
+</body>
+</html>`;
+}
+
+function deactivate() {}
+
+module.exports = { activate, deactivate };

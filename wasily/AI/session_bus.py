@@ -33,6 +33,13 @@ _SUBS: dict[str, "queue.Queue[dict]"] = {}
 _SESS: "collections.OrderedDict[str, dict]" = collections.OrderedDict()
 _SEQ = [0]
 SUB_COUNT = [0]
+# 会话历史提供者：服务重启后快照是空的，由主服务把已落盘的会话喂回来，
+# 两端打开页面才能看到同一份历史（否则只有重启后的新消息可见）。
+_PROVIDER: list = [None]
+
+
+def set_provider(fn) -> None:
+    _PROVIDER[0] = fn
 
 
 def _next_id() -> int:
@@ -186,11 +193,23 @@ def snapshot(session_id: str) -> dict:
     sid = str(session_id or "")
     with _LOCK:
         rec = _SESS.get(sid)
+        msgs = [dict(m) for m in rec["messages"]] if rec else []
+    if not msgs and _PROVIDER[0] and sid:
+        # 重启后快照为空：用已落盘的历史初始化一次，保证两端看到同一份上下文
+        try:
+            seeded = _PROVIDER[0](sid) or []
+        except Exception:  # noqa: BLE001
+            seeded = []
+        if seeded:
+            seed(sid, seeded)
+            with _LOCK:
+                rec = _SESS.get(sid)
+                msgs = [dict(m) for m in rec["messages"]] if rec else []
+    with _LOCK:
         if rec is None:
             return {"ok": True, "session_id": sid, "messages": [], "rev": 0,
                     "seq": _SEQ[0], "hash": _msg_hash([]), "updated": 0,
                     "exists": False}
-        msgs = [dict(m) for m in rec["messages"]]
         return {"ok": True, "session_id": sid, "messages": msgs, "rev": rec["rev"],
                 "seq": rec["seq"] or _SEQ[0], "hash": _msg_hash(msgs),
                 "updated": rec["updated"], "exists": True}

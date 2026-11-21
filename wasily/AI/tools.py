@@ -2846,6 +2846,8 @@ CORE_TOOLS = (
     # 记忆/任务/推理
     "memory_save", "memory_list", "mem_recall", "task_save", "task_update",
     "task_done", "sequential_thinking", "todo_list", "time_now", "system_info",
+    # 主动提问（关键决策点暂停，等用户选择/补充）
+    "ask_user",
     # 子智能体委派（独立上下文，防爆窗）
     "agent_delegate", "agent_list",
 )
