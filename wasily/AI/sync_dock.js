@@ -164,7 +164,7 @@
     el.className = 'wSyncNote';
     el.style.cssText = 'margin:8px 0;padding:8px 10px;border:1px solid #2b2f38;border-radius:8px;'
       + 'background:#15171c;color:#9aa4b2;font:12px/1.5 system-ui,sans-serif;white-space:pre-wrap;';
-    el.textContent = '【IDE】' + (title || kind) + (detail ? '\n' + detail : '')
+    el.textContent = (title || kind) + (detail ? '\n' + detail : '')
       + (status ? '\n状态：' + status : '');
     host.appendChild(el);
     host.scrollTop = host.scrollHeight;
@@ -209,7 +209,8 @@
       return;
     }
     if (ev.type === 'report' && PAGE === 'agent') {
-      note(ev.kind, ev.title, ev.detail, ev.status);
+      // 只保留有意义的执行回执；纯心跳类上报不刷屏
+      if (ev.title || ev.detail) note(ev.kind, ev.title || 'IDE 操作', ev.detail, ev.status);
       return;
     }
   }
@@ -277,48 +278,41 @@
     }).catch(function () { });
   }
 
-  /* ---------- 执行状态：命令事件按会话过滤展示 ---------- */
+  /* ---------- 执行状态：命令结束后在对话流内提示一次 ----------
+     Trae 把命令执行放在对话时间线里，不弹独立面板、也不为「运行中」重复刷屏；
+     这里只在命令收尾时补一条，样式与普通消息一致。 */
   function connectCommands() {
     try {
       var cs = new EventSource(BASE + '/v1/commands/stream?after=0');
       var startedAt = Date.now();
+      var noted = Object.create(null);
       cs.onmessage = function (e) {
         var ev = null;
         try { ev = JSON.parse(e.data); } catch (err) { return; }
         if (!ev || ev.type === 'line' || !ev.run) return;
         var run = ev.run;
         if (!run || !run.started_at) return;
-        // 只提示本次打开页面之后开始的命令，避免重放旧命令刷屏
-        if (run.started_at * 1000 < startedAt) return;
+        if (run.started_at * 1000 < startedAt) return;   // 重放的旧命令不提示
         if (SID && run.session_id && run.session_id !== SID) return;
-        if (PAGE !== 'agent') return;
-        var label = (run.source === 'ide' ? 'IDE 命令' : '命令') + '：' + (run.command || '');
-        note('command', label, run.abort_reason || '', run.status);
+        if (PAGE !== 'agent' || run.status === 'running') return;  // 只在收尾时提示
+        if (noted[run.id]) return;
+        noted[run.id] = 1;
+        var label = (run.status === 'failed' || run.status === 'timeout')
+          ? '命令失败' : (run.status === 'aborted' ? '命令已中断' : '命令已完成');
+        note('command', label + ' · ' + (run.command || ''), '', '');
       };
     } catch (e) { }
   }
 
-  /* ---------- 状态徽标 ---------- */
-  var badge = document.createElement('div');
-  badge.id = 'wSyncBadge';
-  badge.style.cssText = 'position:fixed;left:12px;top:12px;z-index:9997;padding:3px 9px;border-radius:999px;'
-    + 'background:rgba(21,23,28,.9);border:1px solid #2b2f38;color:#9aa4b2;'
-    + 'font:11px/1.6 system-ui,sans-serif;cursor:pointer;user-select:none;';
-  badge.textContent = '同步 · 连接中';
-  badge.title = '点击立即核对两端一致性';
-  badge.addEventListener('click', function () { verify(true); });
-  function mount() { if (document.body) document.body.appendChild(badge); }
-  if (document.body) mount();
-  else document.addEventListener('DOMContentLoaded', mount);
-
-  function setOnline(on) {
-    badge.textContent = on ? '同步 · 在线' : '同步 · 重连中';
-    badge.style.color = on ? '#4ade80' : '#fbbf24';
-  }
+  /* ---------- 状态只在内部维护 ----------
+     为什么不做悬浮徽标：Trae 的同步是隐性的，界面上不该多出「同步 · 在线」这类提示，
+     否则会像第三方插件而不是编辑器自身能力。 */
+  var SYNC_ONLINE = false;
+  function setOnline(on) { SYNC_ONLINE = !!on; }
 
   window.WasilySync = {
     state: function () {
-      return { page: PAGE, sid: SID, seq: lastSeq, online: !!es, seen: Object.keys(seen).length };
+      return { page: PAGE, sid: SID, seq: lastSeq, online: SYNC_ONLINE, seen: Object.keys(seen).length };
     },
     verify: function () { return verify(true); },
     setSid: setSid

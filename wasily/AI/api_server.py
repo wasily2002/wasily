@@ -822,8 +822,9 @@ class _FakeLlama:
                                     "options": ["A方案", "B方案"], "timeout": 60}},
                     ensure_ascii=False) + "\n```")
             else:
+                _am = re.search(r'"answers":\s*\["([^"]+)"\]', _tail)
                 text = ("已收到用户答案：" +
-                        ("A方案" if "A方案" in _tail else "（未拿到答案）") + "，继续执行。")
+                        (_am.group(1) if _am else "（未拿到答案）") + "，继续执行。")
         elif done_rounds < rounds:
             _args = {"path": os.path.join(BASE_DIR, "config.json"),
                      "offset": done_rounds * 10, "limit": 10}
@@ -6736,12 +6737,7 @@ class APIHandler(BaseHTTPRequestHandler):
                 self._set_headers(200, "text/html; charset=utf-8")
                 with open(agent_html, "r", encoding="utf-8") as f:
                     body = f.read()
-                # 注入跨页命令同步面板（与 IDE 面板同一份实现）
-                try:
-                    import command_api
-                    body = command_api.inject_dock(body)
-                except Exception as _cmd_exc:  # noqa: BLE001
-                    log("[commands] 注入同步面板失败: %s" % str(_cmd_exc)[:120], "warning")
+                # 同步能力在对话流内部生效，不再注入额外的浮动命令面板
                 self.wfile.write(body.encode("utf-8"))
             else:
                 self._set_headers(404)
@@ -7831,13 +7827,8 @@ class APIHandler(BaseHTTPRequestHandler):
                         json.dumps(_ui, ensure_ascii=False) + ";</script></head>", 1)
                 except Exception:
                     pass
-                # 注入跨页命令同步面板：与 Agent 窗口共用同一份实现
-                try:
-                    import command_api
-                    body = command_api.inject_dock(body)
-                except Exception as _cmd_exc:  # noqa: BLE001
-                    log("[commands] 注入同步面板失败: %s" % str(_cmd_exc)[:120], "warning")
-                # 注入跨端会话同步层：对话内容与执行状态和 Agent 页实时对齐
+                # 只注入不显示 UI 的会话同步层：同步发生在对话流内部，
+                # 不再弹「跨页命令同步」浮动面板（与 Trae 的呈现方式一致）
                 try:
                     import session_api
                     body = session_api.inject_dock(body)
