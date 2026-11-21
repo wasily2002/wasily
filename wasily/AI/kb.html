@@ -1,0 +1,302 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>本地知识库 · wasily</title>
+<style>
+  :root{
+    --bg:#111310; --panel:#181b17; --panel2:#1e211c; --line:#2c302a;
+    --fg:#e6e8e1; --sub:#9aa093; --green:#3fb950; --green-dim:#23342b;
+    --amber:#d8a657; --red:#e06c75;
+  }
+  *{box-sizing:border-box}
+  body{margin:0;background:var(--bg);color:var(--fg);
+       font:14px/1.6 "Microsoft YaHei","Segoe UI",system-ui,sans-serif;}
+  a{color:#8bd5a8;text-decoration:none}
+  .wrap{max-width:1180px;margin:0 auto;padding:18px 20px 60px}
+  header{display:flex;align-items:center;gap:14px;flex-wrap:wrap;
+         padding-bottom:14px;border-bottom:1px solid var(--line)}
+  h1{font-size:18px;margin:0;font-weight:600;letter-spacing:.3px}
+  h1 span{color:var(--green)}
+  .grow{flex:1}
+  .chip{font-size:12px;color:var(--sub);background:var(--panel2);
+        border:1px solid var(--line);border-radius:999px;padding:2px 10px}
+  .chip b{color:var(--fg);font-weight:600}
+  button{font:inherit;cursor:pointer;border-radius:8px;border:1px solid var(--line);
+         background:var(--panel2);color:var(--fg);padding:7px 14px}
+  button:hover{border-color:#3d443a;background:#242821}
+  button.primary{background:var(--green-dim);border-color:#2f5a3f;color:#b7f0c9}
+  button.primary:hover{background:#2a4232}
+  button:disabled{opacity:.45;cursor:not-allowed}
+  .searchbar{display:flex;gap:10px;margin:18px 0 10px}
+  .searchbar input{flex:1;min-width:0;background:var(--panel);border:1px solid var(--line);
+    color:var(--fg);border-radius:10px;padding:12px 16px;font-size:15px;outline:none}
+  .searchbar input:focus{border-color:#3a6b4b;box-shadow:0 0 0 2px #1f3a29}
+  .filters{display:flex;gap:8px;flex-wrap:wrap;margin-bottom:16px}
+  .filters button{padding:4px 12px;font-size:12.5px;border-radius:999px}
+  .filters button.on{background:var(--green-dim);border-color:#2f5a3f;color:#b7f0c9}
+  .progress{display:none;background:var(--panel);border:1px solid var(--line);
+    border-radius:10px;padding:12px 14px;margin-bottom:16px}
+  .progress.show{display:block}
+  .progress .row{display:flex;gap:16px;flex-wrap:wrap;font-size:12.5px;color:var(--sub)}
+  .progress .cur{font-family:Consolas,monospace;font-size:11.5px;color:#7f877b;
+    margin-top:6px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+  .bar{height:5px;background:#232820;border-radius:99px;overflow:hidden;margin-top:9px}
+  .bar i{display:block;height:100%;width:30%;background:linear-gradient(90deg,#2f7a46,#3fb950);
+    border-radius:99px;animation:slide 1.3s ease-in-out infinite}
+  @keyframes slide{0%{margin-left:-30%}100%{margin-left:100%}}
+  .meta{font-size:12px;color:var(--sub);margin:6px 0 14px}
+  .card{background:var(--panel);border:1px solid var(--line);border-radius:12px;
+        padding:14px 16px;margin-bottom:12px;transition:border-color .15s}
+  .card:hover{border-color:#3a4438}
+  .card h3{margin:0 0 4px;font-size:14.5px;font-weight:600;display:flex;
+    align-items:center;gap:8px;flex-wrap:wrap}
+  .badge{font-size:11px;padding:1px 7px;border-radius:5px;background:#242a22;
+    color:#9fd6b0;border:1px solid #2f3b2f;font-weight:400}
+  .badge.image{color:#d9c07a;border-color:#4a3f22;background:#2a2417}
+  .badge.pdf{color:#e0a0a8;border-color:#4a2a2e;background:#2a1c1e}
+  .path{font-family:Consolas,monospace;font-size:11.5px;color:#767d72;
+    word-break:break-all;margin-bottom:8px}
+  .snip{color:#cfd4c9;background:#141713;border-left:2px solid #2f5a3f;
+    padding:7px 11px;border-radius:0 6px 6px 0;margin:7px 0;font-size:13px}
+  mark{background:#3d5c2f;color:#eef7e6;border-radius:3px;padding:0 2px}
+  .thumb{width:104px;height:104px;object-fit:cover;border-radius:8px;
+    border:1px solid var(--line);background:#0d0f0c;cursor:pointer}
+  .card .body{display:flex;gap:14px}
+  .card .body .main{flex:1;min-width:0}
+  .actions{display:flex;gap:8px;margin-top:6px}
+  .actions a{font-size:12px;padding:3px 10px;border:1px solid var(--line);
+    border-radius:6px;color:#9fd6b0;background:#181c17}
+  .actions a:hover{border-color:#3a6b4b}
+  .empty{text-align:center;color:var(--sub);padding:60px 20px}
+  .empty b{color:var(--fg)}
+  .err{color:var(--red);font-size:12.5px;margin:8px 0}
+  .toast{position:fixed;bottom:22px;left:50%;transform:translateX(-50%);
+    background:#242a22;border:1px solid #3a4a3a;color:#dfe7da;padding:9px 18px;
+    border-radius:8px;font-size:13px;opacity:0;pointer-events:none;transition:opacity .2s}
+  .toast.show{opacity:1}
+</style>
+</head>
+<body>
+<div class="wrap">
+  <header>
+    <h1>本地知识库 <span>·</span> 全盘检索</h1>
+    <span class="chip">已索引 <b id="stFiles">-</b> 个文件</span>
+    <span class="chip">分块 <b id="stChunks">-</b></span>
+    <span class="chip">库 <b id="stDb">-</b></span>
+    <span class="grow"></span>
+    <button class="primary" id="btnScan">开始全盘索引</button>
+    <button id="btnStop" style="display:none">停止</button>
+    <button id="btnModel" title="下载约 1.1GB，用于图片画面描述">视觉模型</button>
+  </header>
+
+  <div class="searchbar">
+    <input id="q" placeholder="搜索文件内容或图片内容，例如：报销发票 / 海边日落 / 合同违约金" autocomplete="off">
+    <button class="primary" id="btnSearch">搜索</button>
+  </div>
+  <div class="filters" id="filters">
+    <button data-kind="all" class="on">全部</button>
+    <button data-kind="text">文本</button>
+    <button data-kind="pdf">PDF</button>
+    <button data-kind="docx">Word</button>
+    <button data-kind="xlsx">Excel</button>
+    <button data-kind="pptx">PPT</button>
+    <button data-kind="image">图片</button>
+  </div>
+
+  <div class="progress" id="progress">
+    <div class="row">
+      <span>阶段：<b id="pPhase">-</b></span>
+      <span>已发现：<b id="pFound">0</b></span>
+      <span>已索引：<b id="pIndexed">0</b></span>
+      <span>跳过：<b id="pSkipped">0</b></span>
+      <span>错误：<b id="pErrors">0</b></span>
+      <span>图片：<b id="pImages">0</b></span>
+      <span>图像描述：<b id="pCapped">0</b></span>
+      <span>用时：<b id="pElapsed">0s</b></span>
+    </div>
+    <div class="bar"><i></i></div>
+    <div class="cur" id="pCur"></div>
+    <div class="err" id="pMsg"></div>
+  </div>
+
+  <div class="meta" id="meta">输入关键词开始检索；图片结果按“描述 + 图中文字”联合匹配。</div>
+  <div id="results"></div>
+</div>
+<div class="toast" id="toast"></div>
+
+<script>
+let KIND = 'all';
+let timer = null;
+
+function esc(s){
+  return String(s == null ? '' : s).replace(/[&<>"']/g, c => (
+    {'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
+}
+function toast(msg){
+  const t = document.getElementById('toast');
+  t.textContent = msg; t.classList.add('show');
+  clearTimeout(t._tm); t._tm = setTimeout(() => t.classList.remove('show'), 2200);
+}
+function kindName(k){
+  return {text:'文本', pdf:'PDF', docx:'Word', xlsx:'Excel', pptx:'PPT',
+          image:'图片', doc:'Word', xls:'Excel', ppt:'PPT'}[k] || k;
+}
+function fmtSize(n){
+  if(!n) return '0B';
+  if(n < 1024) return n + 'B';
+  if(n < 1048576) return (n/1024).toFixed(1) + 'KB';
+  if(n < 1073741824) return (n/1048576).toFixed(1) + 'MB';
+  return (n/1073741824).toFixed(2) + 'GB';
+}
+function fmtTime(ts){
+  if(!ts) return '';
+  const d = new Date(ts * 1000);
+  const p = x => String(x).padStart(2,'0');
+  return d.getFullYear() + '-' + p(d.getMonth()+1) + '-' + p(d.getDate()) + ' ' +
+         p(d.getHours()) + ':' + p(d.getMinutes());
+}
+function highlight(text, q){
+  let html = esc(text);
+  const terms = q.split(/\s+/).filter(t => t.length >= 2).slice(0, 6);
+  terms.forEach(t => {
+    const re = new RegExp(t.replace(/[.*+?^${}()|[\]\\]/g, '\\$&'), 'gi');
+    html = html.replace(re, m => '<mark>' + m + '</mark>');
+  });
+  return html;
+}
+
+async function refreshStatus(){
+  try{
+    const r = await fetch('/v1/kb/status');
+    const d = await r.json();
+    const ix = d.index || {};
+    document.getElementById('stFiles').textContent = ix.indexed_files ?? 0;
+    document.getElementById('stChunks').textContent = ix.chunks ?? 0;
+    document.getElementById('stDb').textContent = (ix.db_mb ?? 0) + 'MB';
+    const box = document.getElementById('progress');
+    box.classList.toggle('show', !!ix.running);
+    document.getElementById('btnScan').style.display = ix.running ? 'none' : '';
+    document.getElementById('btnStop').style.display = ix.running ? '' : 'none';
+    if(ix.running){
+      document.getElementById('pPhase').textContent = ix.phase || '-';
+      document.getElementById('pFound').textContent = ix.found || 0;
+      document.getElementById('pIndexed').textContent = ix.indexed || 0;
+      document.getElementById('pSkipped').textContent = ix.skipped || 0;
+      document.getElementById('pErrors').textContent = ix.errors || 0;
+      document.getElementById('pImages').textContent = ix.images || 0;
+      document.getElementById('pCapped').textContent = ix.captioned || 0;
+      document.getElementById('pElapsed').textContent = (ix.elapsed || 0) + 's';
+      document.getElementById('pCur').textContent = ix.current || '';
+      document.getElementById('pMsg').textContent = ix.message || '';
+    }
+    const vm = ix.vision || {};
+    const mi = vm.model || {};
+    const btn = document.getElementById('btnModel');
+    if(mi.ready) btn.textContent = '视觉模型已就绪';
+    else if(mi.downloading) btn.textContent = '下载中…';
+    else btn.textContent = '下载视觉模型';
+  }catch(e){ /* 服务重启瞬间忽略 */ }
+}
+
+async function doSearch(){
+  const q = document.getElementById('q').value.trim();
+  if(!q){ toast('请输入关键词'); return; }
+  const box = document.getElementById('results');
+  box.innerHTML = '<div class="empty">检索中…</div>';
+  document.getElementById('meta').textContent = '检索：' + q;
+  try{
+    const url = '/v1/kb/search?q=' + encodeURIComponent(q) +
+                '&kind=' + encodeURIComponent(KIND) + '&limit=20';
+    const r = await fetch(url);
+    const d = await r.json();
+    if(!d.ok) throw new Error(d.error || '检索失败');
+    document.getElementById('meta').textContent =
+      '命中 ' + d.count + ' 个文件 · ' + d.took_ms + 'ms · 模式 ' +
+      (d.mode === 'hybrid' ? '向量+全文' : '全文') +
+      (d.vector_error ? ' · 向量不可用：' + d.vector_error : '');
+    render(d.results || [], q);
+  }catch(e){
+    box.innerHTML = '<div class="empty">检索失败：' + esc(e.message) + '</div>';
+  }
+}
+
+function render(items, q){
+  const box = document.getElementById('results');
+  if(!items.length){
+    box.innerHTML = '<div class="empty"><b>没有匹配结果</b><br>' +
+      '先点右上角「开始全盘索引」，或换个关键词试试。</div>';
+    return;
+  }
+  box.innerHTML = items.map(it => {
+    const badge = '<span class="badge ' + esc(it.kind) + '">' + kindName(it.kind) + '</span>';
+    const snips = (it.snippets || []).map(s =>
+      '<div class="snip">' + highlight(s.text, q) + '</div>').join('');
+    const thumb = it.thumb
+      ? '<img class="thumb" src="' + esc(it.thumb) + '" loading="lazy" ' +
+        'onclick="window.open(\'' + it.raw + '\',\'_blank\')" title="查看原图">'
+      : '';
+    const open = it.open
+      ? '<a href="' + esc(it.open) + '" target="_blank">打开原文件</a>' : '';
+    const raw = it.raw
+      ? '<a href="' + esc(it.raw) + '" target="_blank">查看原图</a>' : '';
+    return '<div class="card"><h3>' + esc(it.name) + badge +
+      '<span class="chip">' + fmtSize(it.size) + '</span></h3>' +
+      '<div class="path">' + esc(it.path) + '</div>' +
+      '<div class="body">' + thumb + '<div class="main">' + snips +
+      '<div class="actions">' + open + raw +
+      '<a href="javascript:void(0)" onclick="copyPath(\'' +
+        esc(it.path).replace(/\\/g, '\\\\').replace(/'/g, "\\'") + '\')">复制路径</a>' +
+      '</div></div></div>' +
+      '<div class="meta" style="margin:8px 0 0">修改时间 ' + fmtTime(it.mtime) +
+      ' · 相关度 ' + it.score + '</div></div>';
+  }).join('');
+}
+
+function copyPath(p){
+  navigator.clipboard.writeText(p).then(()=>toast('路径已复制'), ()=>toast('复制失败'));
+}
+
+document.getElementById('filters').addEventListener('click', e => {
+  const b = e.target.closest('button[data-kind]');
+  if(!b) return;
+  KIND = b.dataset.kind;
+  document.querySelectorAll('#filters button').forEach(x =>
+    x.classList.toggle('on', x === b));
+  if(document.getElementById('q').value.trim()) doSearch();
+});
+
+document.getElementById('btnSearch').addEventListener('click', doSearch);
+document.getElementById('q').addEventListener('keydown', e => {
+  if(e.key === 'Enter') doSearch();
+});
+document.getElementById('btnScan').addEventListener('click', async () => {
+  const ok = confirm('将只读扫描 C: 与 D: 盘全部可读文件（跳过系统目录），' +
+    '首次耗时较长。随时可以停止。继续？');
+  if(!ok) return;
+  const r = await fetch('/v1/kb/scan', {method:'POST',
+    headers:{'Content-Type':'application/json'}, body: JSON.stringify({})});
+  const d = await r.json();
+  if(!d.ok){ toast(d.error || '启动失败'); return; }
+  toast('索引已启动');
+  refreshStatus();
+});
+document.getElementById('btnStop').addEventListener('click', async () => {
+  await fetch('/v1/kb/stop', {method:'POST', headers:{'Content-Type':'application/json'},
+    body:'{}'});
+  toast('正在停止…');
+});
+document.getElementById('btnModel').addEventListener('click', async () => {
+  const r = await fetch('/v1/kb/download_model', {method:'POST',
+    headers:{'Content-Type':'application/json'}, body:'{}'});
+  const d = await r.json();
+  toast(d.model && d.model.ready ? '模型已就绪' : '已开始后台下载（约 1.1GB）');
+  refreshStatus();
+});
+
+refreshStatus();
+setInterval(refreshStatus, 2500);
+</script>
+</body>
+</html>

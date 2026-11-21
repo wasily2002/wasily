@@ -1,0 +1,2364 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta http-equiv="Content-Security-Policy" content="default-src 'none'; style-src 'unsafe-inline'; script-src 'unsafe-inline'; frame-src http://127.0.0.1:8000 http://localhost:8000;">
+<style>
+  :root {
+    --bg: #17181c; --panel: #1d1e23; --card: #23242a; --line: #2e2f36;
+    --text: #d7dae0; --sub: #8b8d95; --sub2: #63656d;
+    --green: #2f9e56; --blue: #6c9ef8; --amber: #dfa758; --red: #ee6b81;
+  }
+  * { box-sizing: border-box; }
+  html, body { height: 100%; margin: 0; padding: 0; }
+  body {
+    display: flex; flex-direction: column; overflow: hidden; position: relative;
+    background: var(--vscode-editor-background, #17181c);
+    color: var(--vscode-foreground, #d7dae0);
+    font-family: var(--vscode-font-family, "Microsoft YaHei", sans-serif);
+    font-size: 12.5px; line-height: 1.55;
+  }
+  button, select, textarea, input { font-family: inherit; }
+
+  .panelTitle {
+    flex: none; height: 36px; display: flex; align-items: center;
+    padding: 0 12px; font-size: 13px; font-weight: 700; letter-spacing: 1.5px;
+    color: #eef0f5; text-transform: uppercase;
+    border-bottom: 1px solid var(--line);
+  }
+
+  .spacer { flex: 1 1 auto; }
+
+  /* ===== 消息区 ===== */
+  #chat { flex: 1; overflow-y: auto; padding: 12px 12px 4px; }
+  #chat::-webkit-scrollbar { width: 8px; }
+  #chat::-webkit-scrollbar-thumb { background: #3a3b42; border-radius: 4px; }
+  .msg { margin-bottom: 14px; }
+  .msg.user { display: flex; justify-content: flex-end; align-items: flex-start; gap: 8px; }
+  .ububble {
+    max-width: 82%; background: var(--card); border: 1px solid var(--line);
+    border-radius: 10px; padding: 8px 11px; white-space: pre-wrap; word-break: break-word;
+    font-size: 12.5px;
+  }
+  /* 用户头像（气泡右侧） */
+  .uav {
+    width: 22px; height: 22px; border-radius: 50%; flex: none; margin-top: 2px;
+    background: #3a3d46; color: #cdd3dd;
+    display: flex; align-items: center; justify-content: center;
+  }
+  .uav svg { width: 13px; height: 13px; display: block; }
+  .aiHead { display: flex; align-items: center; gap: 6px; margin-bottom: 3px; }
+  .aiHead .av {
+    width: 16px; height: 16px; border-radius: 4px; flex: none;
+    background: #2b7d4b; color: #eaf6ee;
+    display: flex; align-items: center; justify-content: center;
+  }
+  .aiHead .av svg { width: 11px; height: 11px; display: block; }
+  .aiHead .nm { font-size: 11.5px; font-weight: 500; color: #dfe3ea; }
+  .aiMeta { font-size: 10.5px; color: #6b6f79; margin: 0 0 7px 22px; }
+  .md { font-size: 12.5px; word-break: break-word; }
+  .md p { margin: 0 0 6px; }
+  .md h1, .md h2, .md h3 { font-size: 13px; margin: 8px 0 4px; color: #e8ebf2; }
+  .md ul, .md ol { margin: 4px 0 6px; padding-left: 18px; }
+  .md li { margin: 2px 0; }
+  .md code.inl { background: rgba(255,255,255,.07); border-radius: 4px; padding: 1px 4px; font-size: 11.5px; }
+  .md a { color: var(--blue); }
+  /* GFM 表格（TRAE 风格） */
+  .md table.mdt { border-collapse: collapse; margin: 8px 0; font-size: 12px; width: 100%; }
+  .md table.mdt th, .md table.mdt td {
+    border: 1px solid #33353f; padding: 6px 10px; text-align: left;
+    vertical-align: top; line-height: 1.55; word-break: break-word;
+  }
+  .md table.mdt th { background: #22242e; color: #e6e9f2; font-weight: 600; }
+  .md table.mdt tbody tr:nth-child(even) td { background: rgba(255,255,255,.025); }
+  .md hr { border: none; border-top: 1px solid var(--line); margin: 10px 0; }
+  .md blockquote {
+    margin: 6px 0; padding: 4px 10px; border-left: 3px solid #3a3d4a;
+    color: var(--sub); background: rgba(255,255,255,.02); border-radius: 0 6px 6px 0;
+  }
+  /* 实时工具执行行（TRAE 式：生成中逐步上屏） */
+  .lv-tool {
+    display: flex; align-items: center; gap: 7px; padding: 3px 0;
+    font-size: 11.5px; color: var(--sub); line-height: 1.5;
+  }
+  .lv-tool .lv-ico { font-size: 11px; }
+  .lv-tool .lv-name { color: #7fb8ff; font-family: Consolas, "Courier New", monospace; font-size: 11px; }
+  .lv-tool .lv-arg {
+    color: var(--sub2); font-size: 10.5px; overflow: hidden;
+    text-overflow: ellipsis; white-space: nowrap; max-width: 200px;
+  }
+  .lv-tool .lv-state { margin-left: auto; font-size: 10.5px; color: var(--sub2); flex-shrink: 0; }
+  .lv-tool .lv-state.ok { color: #59d98a; }
+  .lv-tool .lv-state.err { color: #f48771; }
+  .lv-dot { display: inline-block; width: 5px; height: 5px; border-radius: 50%; background: #4d9dff; animation: lvPulse 1.2s infinite; }
+  @keyframes lvPulse { 0%,100% { opacity: 1; } 50% { opacity: .3; } }
+  .code { border: 1px solid var(--line); border-radius: 8px; overflow: hidden; margin: 6px 0; background: #1b1c21; }
+  .codeHead {
+    display: flex; align-items: center; gap: 6px; padding: 4px 8px;
+    border-bottom: 1px solid var(--line); font-size: 10.5px; color: var(--sub2);
+  }
+  .codeHead .spacer { flex: 1; }
+  .codeHead button {
+    border: none; background: transparent; color: var(--sub); font-size: 10.5px;
+    cursor: pointer; padding: 1px 5px; border-radius: 4px;
+  }
+  .codeHead button:hover { background: rgba(255,255,255,.08); color: var(--text); }
+  .codeHead button.primary { background: rgba(80,160,255,.18); color: #8fbaff; }
+  .codeHead button.primary:hover { background: rgba(80,160,255,.3); color: #cfe1ff; }
+  .code pre { margin: 0; padding: 8px 10px; overflow-x: auto; font-size: 11.5px; line-height: 1.5; }
+  .aiActions { display: flex; align-items: center; gap: 4px; margin-top: 7px; }
+  .aiActions button {
+    border: none; background: transparent; color: #7c8089;
+    width: 24px; height: 22px; border-radius: 5px; padding: 0; cursor: pointer;
+    display: flex; align-items: center; justify-content: center;
+  }
+  .aiActions button svg { width: 13px; height: 13px; display: block; }
+  .aiActions button:hover { color: #dfe3ea; background: rgba(255,255,255,.06); }
+
+  /* 工具执行胶囊 */
+  .tools { border: 1px solid var(--line); border-radius: 8px; margin: 6px 0; overflow: hidden; background: rgba(255,255,255,.02); }
+  .toolsHead {
+    display: flex; align-items: center; gap: 6px; padding: 5px 9px; cursor: pointer;
+    font-size: 11px; color: var(--sub);
+  }
+  .toolsHead:hover { background: rgba(255,255,255,.04); }
+  .toolsHead .spin { width: 8px; height: 8px; border-radius: 50%; background: var(--green); }
+  .toolsBody { display: none; border-top: 1px solid var(--line); padding: 5px 9px; }
+  .tools.open .toolsBody { display: block; }
+  .toolRow { display: flex; gap: 6px; font-size: 11px; color: var(--sub2); padding: 1px 0; }
+  .toolRow .tn { color: var(--text); }
+
+  /* 变更卡片（对齐参考：默认收起为单行，点击展开文件明细） */
+  .changes { border: 1px solid var(--line); border-radius: 8px; background: #222329; margin: 9px 0; overflow: hidden; }
+  .changesHead {
+    display: flex; align-items: center; gap: 7px; padding: 8px 10px;
+    font-size: 12px; color: #e4e7ee; cursor: pointer;
+  }
+  .changesHead:hover { background: rgba(255,255,255,.03); }
+  .changesHead .docIco {
+    width: 26px; height: 26px; border-radius: 6px; flex: none; background: #2c2d34;
+    color: #c9ccd4; display: flex; align-items: center; justify-content: center;
+  }
+  .changesHead .docIco svg { width: 14px; height: 14px; display: block; }
+  .changesHead .ct { font-weight: 500; }
+  .changesHead .cv { color: #6b6f79; font-size: 11px; }
+  .changesHead .vsep { width: 1px; height: 14px; background: var(--line); margin: 0 2px; }
+  .changesHead .expand { border: none; background: transparent; color: #8f939c; cursor: pointer;
+    width: 22px; height: 22px; border-radius: 5px; display: flex; align-items: center; justify-content: center; }
+  .changesHead .expand:hover { background: rgba(255,255,255,.07); color: #dfe3ea; }
+  .changesHead .expand svg { width: 13px; height: 13px; display: block; }
+  .plus { color: #4ec977; font-size: 10.5px; }
+  .minus { color: var(--red); font-size: 10.5px; }
+  .changesBody { display: none; border-top: 1px solid var(--line); }
+  .changes.open .changesBody { display: block; }
+  .fileRow { display: flex; align-items: center; gap: 6px; padding: 5px 10px; font-size: 11px; }
+  .fileRow:hover { background: rgba(255,255,255,.04); }
+  .fileRow .fp { flex: 1; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; color: var(--text); }
+  .fileRow .st { color: var(--sub2); font-size: 10px; }
+  .fileRow .fo { color: var(--sub2); border: none; background: transparent; cursor: pointer; font-size: 10.5px; }
+  .fileRow .fo:hover { color: var(--text); }
+  .changesFoot { display: flex; gap: 6px; padding: 7px 10px; border-top: 1px solid var(--line); }
+  .changesFoot button {
+    flex: 1; border-radius: 6px; font-size: 11px; padding: 4px 0; cursor: pointer;
+    border: 1px solid var(--line); background: transparent; color: var(--text);
+  }
+  .changesFoot .acc { background: var(--green); border-color: var(--green); color: #fff; }
+  .changesFoot button:hover { opacity: .88; }
+
+  /* 思考中 */
+  .thinking { display: flex; align-items: center; gap: 6px; color: var(--sub); font-size: 11.5px; padding: 2px 0 8px; }
+  .thinking .d { width: 4px; height: 4px; border-radius: 50%; background: var(--green); animation: bl 1.2s infinite; }
+  .thinking .d:nth-child(3) { animation-delay: .2s; }
+  .thinking .d:nth-child(4) { animation-delay: .4s; }
+  @keyframes bl { 0%,60%,100% { opacity:.5; transform: translateY(0) } 30% { opacity:1; transform: translateY(-3px) } }
+  .empty { color: var(--sub2); font-size: 11.5px; text-align: center; padding: 22px 6px; line-height: 1.8; }
+
+  /* ===== 思考过程（可折叠，保留在对话里） ===== */
+  .thinkBox { border: 1px solid var(--line); border-radius: 8px; margin: 4px 0 8px; background: rgba(255,255,255,.02); overflow: hidden; }
+  .thinkHead { display: flex; align-items: center; gap: 6px; padding: 6px 9px; cursor: pointer; font-size: 11.5px; color: var(--sub); }
+  .thinkHead:hover { background: rgba(255,255,255,.04); }
+  .thinkHead .cv { margin-left: auto; color: var(--sub2); font-size: 11px; }
+  .thinkHead .ico { color: #c9a6ff; display: inline-flex; }
+  .thinkHead .ico svg { width: 12px; height: 12px; display: block; }
+  .thinkBody { display: none; border-top: 1px solid var(--line); padding: 6px 10px 8px; }
+  .thinkBox.open .thinkBody { display: block; }
+  .tLine { display: flex; gap: 6px; font-size: 11px; color: var(--sub2); padding: 2px 0; line-height: 1.5; }
+  .tLine .dot { color: #59d98a; flex: none; }
+  .tLine.run .dot { color: #dfa758; }
+  .thinkDots { display: inline-flex; gap: 3px; margin-left: 2px; }
+  .thinkDots i { width: 3px; height: 3px; border-radius: 50%; background: currentColor; opacity: .5; animation: bl 1.2s infinite; }
+  .thinkDots i:nth-child(2) { animation-delay: .2s; }
+  .thinkDots i:nth-child(3) { animation-delay: .4s; }
+
+  /* ===== 任务过程流（思考→执行→检测，折叠在耗时条下） ===== */
+  .aiMeta {
+    font-size: 10.5px; color: #6b6f79; margin: 0 0 7px 22px;
+    cursor: pointer; user-select: none; display: inline-flex; align-items: center; gap: 3px;
+  }
+  .aiMeta:hover { color: #9aa0ad; }
+  .aiMeta .cv { transition: transform .2s; display: inline-block; }
+  .aiMeta.open .cv { transform: rotate(180deg); }
+  .procWrap { display: none; margin: -2px 0 8px 22px; }
+  .procWrap.open { display: block; }
+  /* 统计头（Trae 式：已读取 N 个文件，搜索 N 次文件…） */
+  .procTally {
+    display: flex; align-items: center; gap: 6px; padding: 4px 6px;
+    font-size: 11.5px; color: var(--sub); cursor: pointer; user-select: none; line-height: 1.5;
+  }
+  .procTally:hover { color: #a6abb6; }
+  .procTally .txt { flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+  .procTally .cv { font-size: 10px; color: var(--sub2); flex: none; transition: transform .2s; }
+  .procWrap.fold .procFlow { display: none; }
+  .procWrap.fold .procTally .cv { transform: rotate(180deg); }
+  .procTally.static { cursor: default; color: var(--sub2); }
+  .procTally.static:hover { color: var(--sub2); }
+  .procStep { }
+  .procStepHead {
+    display: flex; align-items: center; gap: 6px; padding: 3px 6px; cursor: pointer;
+    font-size: 11px; color: var(--sub);
+  }
+  .procStepHead:hover { background: rgba(255,255,255,.04); border-radius: 5px; }
+  .procStep.leaf .procStepHead { cursor: default; }
+  .procStep.leaf .procStepHead:hover { background: transparent; }
+  .procStepHead .cv { margin-left: auto; color: var(--sub2); font-size: 10px; transition: transform .2s; }
+  .procStep.open .procStepHead .cv { transform: rotate(180deg); }
+  .procStepBody { display: none; padding: 6px 10px 8px; border-top: 1px solid var(--line); }
+  .procStep.open .procStepBody { display: block; }
+  .procStep.think .procStepHead .lbl { color: #c9a6ff; font-weight: 600; }
+  .procStep.tool .procStepHead .lbl { color: #dfa758; }
+  .procStep.tool .procStepHead .cmd { color: #9aa0ad; max-width: 260px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+  .procStep.result .procStepHead .lbl { color: #59d98a; }
+  .procStep .tx { font-size: 11px; color: var(--sub2); line-height: 1.55; white-space: pre-wrap; word-break: break-word; }
+  .procStep .args { font-size: 10.5px; color: #8b8f9a; margin-top: 3px; }
+  .procStep .resultTxt { font-size: 11px; color: var(--sub2); line-height: 1.5; white-space: pre-wrap; word-break: break-word; max-height: 200px; overflow-y: auto; }
+  .procStep .resOk { color: #59d98a; }
+  .procStep .resFail { color: #ee6b81; }
+  /* 步骤行图标（对齐 Trae） */
+  .procStepHead .ico { width: 14px; height: 14px; flex: none; color: var(--sub2); display: flex; align-items: center; }
+  .procStepHead .ico svg { width: 14px; height: 14px; display: block; }
+  .procStep.think .procStepHead .lbl { color: var(--sub); font-weight: 500; }
+  .procStep.tool .procStepHead .lbl { color: #cfd4dd; font-weight: 500; }
+  .procStep.tool .procStepHead .cmd { color: #9aa0ad; max-width: 230px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+  .procStep.think .procStepBody { border-top: none; padding: 0 10px 8px; }
+  .procStep.think .procStepBody .tx {
+    border: 1px solid var(--line); border-radius: 6px;
+    background: rgba(255,255,255,.02); padding: 8px 10px;
+    max-height: 200px; overflow-y: auto;
+  }
+  /* 生成中：过程流直接展开显示，不折叠 */
+  .procWrap.live { display: block; }
+  /* 底部状态行（TRAE 式：正在规划下一步） */
+  .procStatus {
+    display: flex; align-items: center; gap: 7px; padding: 6px 6px;
+    font-size: 11.5px; color: var(--sub);
+  }
+  @keyframes spinRot { to { transform: rotate(360deg); } }
+  .spin {
+    width: 11px; height: 11px; flex: none; border-radius: 50%;
+    border: 1.5px solid #4a4e5a; border-top-color: #8fbaff;
+    animation: spinRot .9s linear infinite;
+  }
+  /* 工具行执行中状态 */
+  .procStep.running .procStepHead .lbl { color: #8fbaff; }
+  .procStep.running .procStepHead .cmd { color: #8b8f9a; }
+  /* ===== 输入框上方状态栏（TRAE 式：进度 + 轮换提示） ===== */
+  #stBar { padding: 4px 12px 6px; }
+  #stBar .stLine {
+    display: flex; align-items: center; gap: 7px;
+    font-size: 12px; color: var(--sub); line-height: 1.6;
+  }
+  #stBar .stTip {
+    margin-top: 2px; font-size: 11px; color: #6b6f79; line-height: 1.5;
+    overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
+  }
+
+  /* ===== 已附加上下文 chips ===== */
+  #refChip { display: none; flex-wrap: wrap; gap: 5px; font-size: 10.5px; color: var(--sub); margin-bottom: 5px; }
+  .ctxChip {
+    display: inline-flex; align-items: center; gap: 4px; max-width: 100%;
+    background: rgba(255,255,255,.06); border: 1px solid var(--line); border-radius: 6px;
+    padding: 2px 4px 2px 6px; color: #c8ccd4;
+  }
+  .ctxChip span.n { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; max-width: 190px; }
+  .ctxChip .cut { color: #dfa758; }
+  .ctxChip button { border: none; background: transparent; color: var(--sub2); cursor: pointer; font-size: 11px; padding: 0 2px; }
+  .ctxChip button:hover { color: #ee6b81; }
+
+  /* ===== 校对员 AI 卡片 ===== */
+  .revCard { border: 1px solid rgba(201,166,255,.28); background: rgba(201,166,255,.06); border-radius: 8px; padding: 7px 10px; margin: -6px 0 12px; }
+  .revHead { display: flex; align-items: center; gap: 6px; font-size: 11.5px; color: #cfc2ff; }
+  .revHead .rvName { font-weight: 600; }
+  .revHead .rvCnt { color: var(--sub); }
+  .revHead .spacer { flex: 1; }
+  .revHead button {
+    border: 1px solid #3a3b42; background: #2b2c33; color: #cfc2ff; border-radius: 5px;
+    font-size: 10.5px; padding: 2px 7px; cursor: pointer;
+  }
+  .revHead button:hover { background: #34353c; }
+  .revBody { margin-top: 5px; }
+  .revLine { font-size: 11px; color: var(--sub); padding: 1px 0; }
+  .revLine b { color: #dfe3ea; font-weight: 600; }
+  .revLine .to { color: #59d98a; }
+  .revIntent { font-size: 11px; color: var(--sub2); margin-top: 4px; }
+
+  /* ===== 输入区（对齐参考：整体一个圆角输入框，控件在框内底部） ===== */
+  #composer { flex: none; padding: 8px 10px 10px; background: transparent; }
+  #composerBox {
+    border: 1px solid #33343b; border-radius: 10px; background: #1b1c21;
+    padding: 8px 9px 6px;
+  }
+  #composerBox:focus-within { border-color: #4a4c57; }
+  #input {
+    width: 100%; min-height: 42px; max-height: 140px; resize: none; outline: none;
+    background: transparent; border: none; border-radius: 0;
+    color: var(--text); font-size: 12.5px; padding: 2px 1px; line-height: 1.55;
+  }
+  #input::placeholder { color: #6b6f79; }
+  .picker {
+    position: absolute; z-index: 100; bottom: calc(100% + 4px); left: 0; right: 0;
+    max-height: 260px; overflow-y: auto;
+    background: #1b1c21; border: 1px solid #3c3e48; border-radius: 8px;
+    box-shadow: 0 6px 24px rgba(0,0,0,.5);
+    font-size: 12px;
+  }
+  .picker .pi {
+    padding: 6px 10px; cursor: pointer; display: flex; align-items: center; gap: 8px;
+    border-bottom: 1px solid #282a32;
+  }
+  .picker .pi:last-child { border-bottom: none; }
+  .picker .pi:hover, .picker .pi.active { background: #2a2c36; }
+  .picker .pi .pi-ic { color: #8fbaff; font-family: monospace; font-size: 11px; min-width: 60px; }
+  .picker .pi .pi-nm { color: #e5e7eb; flex: 1; }
+  .picker .pi .pi-desc { color: #6b6f79; font-size: 11px; }
+  .picker .pi .pi-path { color: #7f8490; font-size: 10.5px; font-family: monospace; opacity: .75; }
+  .of-chip {
+    display: inline-block; padding: 2px 6px; margin: 1px 2px;
+    border: 1px solid #3a3c46; border-radius: 4px;
+    background: #23242a; color: #b6bac5; cursor: pointer;
+    font-family: monospace; font-size: 10.5px;
+    transition: background .1s;
+  }
+  .of-chip:hover { background: #2d303a; color: #e5e7eb; }
+  .cbar { display: flex; align-items: center; gap: 4px; margin-top: 5px; }
+  .cbtn {
+    border: none; background: transparent; color: #9aa0aa;
+    border-radius: 5px; height: 22px; min-width: 22px; font-size: 11.5px; cursor: pointer;
+    display: flex; align-items: center; justify-content: center; padding: 0 4px;
+  }
+  .cbtn svg { width: 14px; height: 14px; display: block; }
+  .cbtn:hover { color: #dfe3ea; background: rgba(255,255,255,.06); }
+  .csel {
+    border: none; background: transparent; color: #9aa0aa;
+    border-radius: 5px; height: 22px; font-size: 11px; padding: 0 2px; outline: none; cursor: pointer;
+  }
+  .csel:hover { color: #dfe3ea; background: rgba(255,255,255,.06); }
+
+  /* ===== 输入栏胶囊与弹层 ===== */
+  .cpill {
+    border: none; background: transparent; color: #9aa0aa; border-radius: 6px;
+    height: 22px; font-size: 11px; padding: 0 6px; cursor: pointer;
+    display: inline-flex; align-items: center; gap: 4px;
+  }
+  .cpill:hover { background: rgba(255,255,255,.06); color: #dfe3ea; }
+  .cpill svg { width: 12px; height: 12px; }
+  .cpill .caret { width: 10px; height: 10px; opacity: .7; }
+  .cpill.full { color: var(--amber); }
+  #pop, #popSub {
+    position: absolute; display: none; z-index: 60; min-width: 200px;
+    background: #25262c; border: 1px solid #34353c; border-radius: 10px;
+    box-shadow: 0 10px 28px rgba(0,0,0,.55); padding: 6px;
+    max-height: 60%; overflow-y: auto;
+  }
+  #pop::-webkit-scrollbar, #popSub::-webkit-scrollbar { width: 6px; }
+  #pop::-webkit-scrollbar-thumb, #popSub::-webkit-scrollbar-thumb { background: #3a3b42; border-radius: 3px; }
+  .popIt {
+    display: flex; align-items: center; gap: 9px; padding: 8px 10px; border-radius: 6px;
+    font-size: 12px; color: #d7dae0; cursor: pointer; white-space: nowrap;
+  }
+  .popIt:hover { background: rgba(255,255,255,.07); }
+  .popIt svg { width: 13px; height: 13px; color: #8f939c; flex: none; }
+  .popIt .sub { margin-left: auto; color: #63656d; font-size: 10px; }
+  .popIt .arr { margin-left: auto; width: 11px; height: 11px; color: #63656d; }
+  .popSep { height: 1px; background: #34353c; margin: 5px 6px; }
+  .popHead { padding: 8px 10px 6px; font-size: 11px; color: #63656d; display: flex; align-items: center; gap: 6px; }
+  .popHead .lnk { margin-left: auto; color: #6c9ef8; cursor: pointer; }
+  /* 权限/模型选项 */
+  .popOpt { display: flex; gap: 10px; padding: 9px 10px; border-radius: 7px; cursor: pointer; align-items: flex-start; }
+  .popOpt:hover { background: rgba(255,255,255,.06); }
+  .popOpt .oi { width: 15px; height: 15px; color: #8f939c; flex: none; margin-top: 1px; }
+  .popOpt .oi svg { width: 100%; height: 100%; }
+  .popOpt .ot { font-size: 12.5px; color: #dfe3ea; }
+  .popOpt.on .ot { color: var(--amber); }
+  .popOpt .od { font-size: 11px; color: #63656d; margin-top: 2px; }
+  .popOpt .ock { margin-left: auto; width: 14px; height: 14px; color: #2f9e56; display: none; flex: none; margin-top: 2px; }
+  .popOpt.on .ock { display: block; }
+  .popM { display: flex; align-items: center; gap: 9px; padding: 7px 10px; border-radius: 7px; cursor: pointer; font-size: 12px; color: #d7dae0; }
+  .popM:hover { background: rgba(255,255,255,.06); }
+  .popM .mico { width: 17px; height: 17px; border-radius: 4px; display: inline-flex; align-items: center; justify-content: center; font-size: 9px; font-weight: 700; color: #fff; flex: none; }
+  .popM .mtag { font-size: 9.5px; color: #59d98a; background: rgba(47,158,86,.16); border-radius: 4px; padding: 0 5px; margin-left: 2px; }
+  .popM .mult { margin-left: auto; color: #63656d; font-size: 10.5px; }
+  .popM .ock { margin-left: auto; width: 13px; height: 13px; color: #2f9e56; }
+  .popFoot { border-top: 1px solid #34353c; margin-top: 5px; padding: 8px 10px 6px; text-align: center; font-size: 12px; color: #9aa0aa; cursor: pointer; border-radius: 0 0 6px 6px; }
+  .popFoot:hover { background: rgba(255,255,255,.06); color: #dfe3ea; }
+  .popOpt .ock svg, .popM .ock svg { width: 100%; height: 100%; display: block; }
+  .popM .mico svg { width: 11px; height: 11px; display: block; }
+  .send {
+    width: 26px; height: 24px; border: none; border-radius: 7px; background: #2f7d4f;
+    color: #fff; cursor: pointer; flex: none;
+    display: flex; align-items: center; justify-content: center;
+  }
+  .send svg { width: 13px; height: 13px; display: block; }
+  .send:hover { background: #368c59; }
+  .send:disabled { opacity: .4; cursor: default; }
+
+  /* ===== 浮层：历史会话 / 内嵌页面 ===== */
+  #sessPanel {
+    position: absolute; top: 44px; left: 8px; right: 8px; max-height: 46%;
+    display: none; flex-direction: column; z-index: 30; overflow: hidden;
+    background: var(--card); border: 1px solid var(--line); border-radius: 9px;
+    box-shadow: 0 8px 22px rgba(0,0,0,.45);
+  }
+  #sessPanel.show { display: flex; }
+  .sessHead { display: flex; align-items: center; padding: 6px 9px; border-bottom: 1px solid var(--line); font-size: 11px; color: var(--sub); }
+  #sessList { overflow-y: auto; }
+  .sessRow { display: flex; align-items: center; gap: 6px; padding: 6px 9px; font-size: 11.5px; cursor: pointer; }
+  .sessRow:hover { background: rgba(255,255,255,.05); }
+  .sessRow.on { background: rgba(108,158,248,.14); }
+  .sessRow .sn { flex: 1; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+  .sessRow .del { border: none; background: transparent; color: var(--sub2); cursor: pointer; font-size: 11px; }
+  .sessRow .del:hover { color: var(--red); }
+
+  #frameView { position: absolute; inset: 0; display: none; flex-direction: column;
+    background: var(--bg); z-index: 40; }
+  #frameView.show { display: flex; }
+  #frameHead { flex: none; height: 34px; display: flex; align-items: center; gap: 6px;
+    padding: 0 8px; border-bottom: 1px solid var(--line); background: var(--panel); }
+  #frameTitle { flex: 1; font-size: 11.5px; color: var(--text); }
+  #frameHead button { border: none; background: transparent; color: var(--sub); cursor: pointer;
+    width: 24px; height: 24px; border-radius: 5px; font-size: 13px; }
+  #frameHead button:hover { background: rgba(255,255,255,.08); color: var(--text); }
+  #frameFrame { flex: 1; border: none; width: 100%; background: #17181c; }
+
+  #portView { position: absolute; inset: 0; display: none; flex-direction: column;
+    background: var(--bg); z-index: 41; }
+  #portView.show { display: flex; }
+  #portHead { flex: none; height: 34px; display: flex; align-items: center; gap: 6px;
+    padding: 0 8px; border-bottom: 1px solid var(--line); background: var(--panel); font-size: 11.5px; }
+  #portHead .spacer { flex: 1; }
+  #portHead button { border: none; background: transparent; color: var(--sub); cursor: pointer;
+    width: 24px; height: 24px; border-radius: 5px; font-size: 13px; }
+  #portHead button:hover { background: rgba(255,255,255,.08); color: var(--text); }
+  #portBody { flex: 1; overflow: auto; padding: 4px 8px 12px; }
+  #portBody table { width: 100%; border-collapse: collapse; font-size: 11.5px; }
+  #portBody th { text-align: left; font-weight: 400; color: var(--sub); padding: 5px 6px;
+    border-bottom: 1px solid var(--line); }
+  #portBody td { padding: 5px 6px; border-bottom: 1px solid rgba(255,255,255,.06); }
+  #portBody tr.row { cursor: pointer; }
+  #portBody tr.row:hover td { background: rgba(255,255,255,.05); }
+  #portBody .on { color: #4ec977; } #portBody .off { color: var(--sub); }
+  #portBody .auto { color: #6c9ef8; }
+  #btnMic.on { color: #e06c75; }
+
+  #toast { position: fixed; left: 50%; bottom: 76px; transform: translateX(-50%);
+    background: rgba(20,21,25,.96); border: 1px solid var(--line); border-radius: 7px;
+    padding: 5px 12px; font-size: 11px; display: none; z-index: 50; }
+
+  /* ===== 任务编排卡片（人物 + 任务 + agent/skill + 工具） ===== */
+  .orch-card {
+    margin: 2px 0 12px; padding: 10px 11px;
+    background: var(--card); border: 1px solid rgba(223,167,88,.45);
+    border-radius: 9px; font-size: 11.5px;
+  }
+  .orch-card .oc-title { color: var(--amber); font-weight: 600; font-size: 12px;
+    display: flex; align-items: center; gap: 6px; }
+  .orch-card .oc-count { margin-left: auto; font-weight: 400; font-size: 10.5px; color: var(--sub2); }
+  .orch-card .oc-goal { color: var(--sub); margin-top: 5px; line-height: 1.5; }
+  .orch-card .oc-people { display: flex; flex-wrap: wrap; gap: 5px; margin-top: 8px; }
+  .orch-card .oc-person {
+    display: inline-flex; align-items: center; gap: 4px; padding: 2px 8px;
+    border-radius: 20px; font-size: 10.5px; color: #e0bd83;
+    background: rgba(223,167,88,.10); border: 1px solid rgba(223,167,88,.35);
+  }
+  .orch-card .oc-person .du { color: var(--sub2); }
+  .orch-card .oc-steps { display: flex; flex-direction: column; gap: 5px; margin-top: 8px; }
+  .orch-card .oc-step {
+    display: flex; gap: 6px; align-items: flex-start; padding: 6px 8px;
+    background: rgba(255,255,255,.03); border: 1px solid var(--line); border-radius: 7px;
+  }
+  .orch-card .oc-step .oi { flex: none; width: 15px; text-align: center; }
+  .orch-card .oc-step .ot { color: var(--text); font-weight: 600; }
+  .orch-card .oc-step .okind {
+    font-size: 9.5px; color: var(--amber); border: 1px solid rgba(223,167,88,.4);
+    border-radius: 20px; padding: 0 6px; margin-right: 5px;
+  }
+  .orch-card .oc-step .odet { color: var(--sub2); margin-top: 2px; line-height: 1.45; word-break: break-all; }
+  .orch-card .oc-step.running { border-color: rgba(223,167,88,.7); }
+  .orch-card .oc-step.done .ot { color: #4ec977; }
+  .orch-card .oc-step.failed .ot { color: var(--red); }
+  .orch-card .oc-tags { display: flex; flex-wrap: wrap; gap: 4px; margin-top: 4px; }
+  .orch-card .oc-tag {
+    font-size: 9.5px; padding: 0 6px; border-radius: 20px;
+    border: 1px solid var(--line); color: var(--sub); background: rgba(255,255,255,.03);
+  }
+  .orch-card .oc-tag.agent { color: #8fb7ff; border-color: rgba(108,158,248,.45); }
+  .orch-card .oc-tag.skill { color: #c7a3f0; border-color: rgba(199,163,240,.45); }
+  .orch-card .oc-tag.ready { color: #4ec977; border-color: rgba(78,201,119,.4); }
+  .orch-card .oc-tag.installed { color: #6c9ef8; border-color: rgba(108,158,248,.5); }
+  .orch-card .oc-tag.missing { color: var(--red); border-color: rgba(238,107,129,.45); }
+  .orch-card .oc-btns { display: flex; gap: 8px; margin-top: 9px; }
+  .orch-card .oc-btns button {
+    flex: 1; height: 28px; border-radius: 6px; border: none; cursor: pointer;
+    font-size: 11.5px; font-weight: 600; color: #fff;
+  }
+  .orch-card .oc-btns .go { background: var(--green); color: #12141a; }
+  .orch-card .oc-btns .go:hover { background: #37ad63; }
+  .orch-card .oc-btns .cancel { background: #35363d; }
+  .orch-card .oc-btns .cancel:hover { background: #41424a; }
+  .orch-card .oc-btns button:disabled { opacity: .5; cursor: not-allowed; }
+  .orch-card .oc-state { color: var(--sub2); margin-top: 7px; text-align: center; }
+
+  @media (max-width: 340px) {
+  }
+</style>
+</head>
+<body>
+<div class="panelTitle">WASILY</div>
+<div id="chat">
+  <div class="empty" id="empty">选好访问权限与模式，直接描述任务。<br>AI 可读写文件、执行命令，改动会以文件卡片呈现，可逐个接受或拒绝。</div>
+</div>
+
+<div id="composer">
+  <div id="refChip"></div>
+  <div id="composerBox">
+    <textarea id="input" placeholder="@ 添加上下文，/ 使用命令"></textarea>
+    <div class="picker" id="picker" style="display:none"></div>
+    <div class="cbar">
+      <button class="cbtn" id="btnAttach" title="添加">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round"><path d="M12 5v14M5 12h14"/></svg>
+      </button>
+      <select class="csel" id="permSel" title="访问权限" style="display:none">
+        <option value="full">完全访问</option>
+        <option value="confirm">需确认</option>
+        <option value="read">只读</option>
+      </select>
+      <button class="cpill full" id="permPill" title="访问权限">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7"><path d="M12 3l8 3v6c0 4.5-3.2 7.7-8 9-4.8-1.3-8-4.5-8-9V6zM9 12l2 2 4-4"/></svg>
+        <span id="permLabel">完全访问</span>
+        <svg class="caret" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2"><path d="M6 15l6-6 6 6"/></svg>
+      </button>
+      <button class="cbtn" id="btnAt" title="引用 wasily 上下文">@</button>
+      <select class="csel" id="modeSel" title="执行模式" style="display:none">
+        <option value="ide">Agent</option>
+        <option value="solo">SOLO</option>
+      </select>
+      <button class="cpill" id="agentPill" title="智能体">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7"><path d="M4 6h16v10H8l-4 4zM8 10h8M8 13h5"/></svg>
+        <span id="agentLabel">Agent</span>
+        <svg class="caret" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2"><path d="M6 15l6-6 6 6"/></svg>
+      </button>
+      <span class="spacer"></span>
+      <select class="csel" id="modelSel" title="模型" style="display:none">
+        <option>Auto</option>
+        <option>极速</option>
+      </select>
+      <button class="cpill" id="modelPill" title="模型">
+        <span id="modelLabel">Auto</span>
+        <svg class="caret" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2"><path d="M6 15l6-6 6 6"/></svg>
+      </button>
+      <button class="cbtn" id="btnMic" title="语音输入">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><rect x="9" y="3.5" width="6" height="10.5" rx="3"/><path d="M5.8 11.5a6.2 6.2 0 0 0 12.4 0M12 18v2.5"/></svg>
+      </button>
+      <button class="cbtn" id="btnStop" title="停止生成" style="display:none">
+        <svg viewBox="0 0 24 24" fill="currentColor"><rect x="7" y="7" width="10" height="10" rx="1.6"/></svg>
+      </button>
+      <button class="send" id="sendBtn" title="发送 (Ctrl+Enter)">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round"><path d="M12 19V5M6.2 10.8 12 5l5.8 5.8"/></svg>
+      </button>
+    </div>
+  </div>
+</div>
+
+<div id="pop"></div>
+<div id="popSub"></div>
+
+<div id="sessPanel">
+  <div class="sessHead">历史会话<span class="spacer"></span><span id="sessCount"></span></div>
+  <div id="sessList"></div>
+</div>
+
+<div id="frameView">
+  <div id="frameHead">
+    <span id="frameTitle"></span>
+    <button id="frameOpen" title="在浏览器中打开">↗</button>
+    <button id="frameClose" title="返回聊天">×</button>
+  </div>
+  <iframe id="frameFrame" title="wasily 内嵌页面"></iframe>
+</div>
+
+<div id="portView">
+  <div id="portHead">
+    <span>端口 · 自动转发</span>
+    <span class="spacer"></span>
+    <button id="portRefresh" title="刷新">⟳</button>
+    <button id="portClose" title="关闭">×</button>
+  </div>
+  <div id="portBody">
+    <table>
+      <thead><tr><th>端口</th><th>名称</th><th>转发</th><th>状态</th></tr></thead>
+      <tbody id="portTb"><tr><td colspan="4" style="color:#8b8f9a">点击 ⟳ 探测…</td></tr></tbody>
+    </table>
+  </div>
+</div>
+
+<div id="toast"></div>
+
+<script>
+(function () {
+  var vscode = acquireVsCodeApi();
+  var SERVER = '__SERVER__';
+
+  var chatEl = document.getElementById('chat');
+  var inputEl = document.getElementById('input');
+  var sendBtn = document.getElementById('sendBtn');
+  var stopBtn = document.getElementById('btnStop');
+  var refChip = document.getElementById('refChip');
+  var modeSel = document.getElementById('modeSel');
+  var permSel = document.getElementById('permSel');
+  var sessPanel = document.getElementById('sessPanel');
+  var sessList = document.getElementById('sessList');
+  var toastEl = document.getElementById('toast');
+  var portView = document.getElementById('portView');
+  var portTb = document.getElementById('portTb');
+  var currentSid = null;
+  var generating = false;
+  var pendingChangesEl = null;
+  var turnStart = 0;
+
+  function toast(text) {
+    toastEl.textContent = text;
+    toastEl.style.display = 'block';
+    clearTimeout(toast._t);
+    toast._t = setTimeout(function () { toastEl.style.display = 'none'; }, 2400);
+  }
+  function esc(s) {
+    return String(s).replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
+  }
+  function scrollBottom() { chatEl.scrollTop = chatEl.scrollHeight; }
+  function clearEmpty() {
+    var e = document.getElementById('empty');
+    if (e && e.parentNode) e.parentNode.removeChild(e);
+  }
+
+  /* ---------- markdown（轻量，支持 GFM 表格/有序列表/分割线/引用块） ---------- */
+  function renderMarkdown(text) {
+    var s = esc(text || '');
+    var blocks = [];
+    s = s.replace(/```([a-zA-Z0-9_+-]*)\n([\s\S]*?)```/g, function (_, lang, code) {
+      var id = 'cb' + blocks.length;
+      blocks.push({ id: id, lang: lang || 'code', code: code.replace(/\n$/, '') });
+      return '\u0000' + id + '\u0000';
+    });
+    // GFM 表格：连续以 | 开头的行，第二行必须是分隔行（|---|---|）
+    s = s.replace(/(^|\n)((?:\|[^\n]*\|[ \t]*(?:\n|$))+)/g, function (_, pre, block) {
+      var rows = block.replace(/\n$/, '').split('\n').map(function (r) { return r.trim(); });
+      if (rows.length < 2 || !/^\|[\s:|-]+\|$/.test(rows[1] || '')) return _;
+      var cells = function (r) {
+        var c = r.replace(/^\|/, '').replace(/\|$/, '').split('|');
+        return c.map(function (x) { return x.trim(); });
+      };
+      var html = '<table class="mdt"><thead><tr>';
+      cells(rows[0]).forEach(function (c) { html += '<th>' + c + '</th>'; });
+      html += '</tr></thead><tbody>';
+      for (var i = 2; i < rows.length; i++) {
+        html += '<tr>';
+        cells(rows[i]).forEach(function (c) { html += '<td>' + c + '</td>'; });
+        html += '</tr>';
+      }
+      html += '</tbody></table>';
+      return pre + '\u0001' + html + '\u0001';
+    });
+    s = s.replace(/^### (.*)$/gm, '<h3>$1</h3>')
+         .replace(/^## (.*)$/gm, '<h2>$1</h2>')
+         .replace(/^# (.*)$/gm, '<h3>$1</h3>');
+    s = s.replace(/^[ \t]*(-{3,}|\*{3,})[ \t]*$/gm, '<hr>');
+    s = s.replace(/^&gt;[ \t]?(.*)$/gm, '<blockquote>$1</blockquote>');
+    s = s.replace(/\*\*([^*]+)\*\*/g, '<b>$1</b>');
+    s = s.replace(/\`([^\`]+)\`/g, '<code class="inl">$1</code>');
+    // 无序列表（先处理，li 行不会再被有序列表规则命中）
+    s = s.replace(/^\s*[-*·]\s+(.*)$/gm, '<li>$1</li>');
+    s = s.replace(/(<li>[\s\S]*?<\/li>)(?!\s*<li>)/g, '<ul>$1</ul>');
+    // 有序列表（oli 占位，包装成 <ol> 后再转回 <li>，避免被 <ul> 规则二次包裹）
+    s = s.replace(/^\s*\d+\.\s+(.*)$/gm, '<oli>$1</oli>');
+    s = s.replace(/(<oli>[\s\S]*?<\/oli>)(?!\s*<oli>)/g, '<ol>$1</ol>');
+    s = s.replace(/<oli>/g, '<li>').replace(/<\/oli>/g, '</li>');
+    s = s.replace(/\n{2,}/g, '</p><p>');
+    s = '<p>' + s + '</p>';
+    // 表格占位还原（避免被 <p> 包裹）
+    s = s.replace(/\u0001([\s\S]*?)\u0001/g, function (_, h) { return '</p>' + h + '<p>'; });
+    s = s.replace(/<p>\s*<\/p>/g, '');
+    s = s.replace(/\u0000(cb\d+)\u0000/g, function (_, id) {
+      var b = null;
+      for (var i = 0; i < blocks.length; i++) { if (blocks[i].id === id) b = blocks[i]; }
+      if (!b) return '';
+      var code = esc(b.code);
+      var isShell = /^(bash|sh|shell|powershell|cmd|bat|terminal)$/i.test(b.lang || '');
+      var btns = '<button data-diff="' + id + '" title="整文件 diff 预览">Diff</button>' +
+        '<button data-hunkdiff="' + id + '" title="逐块选择要应用的改动">逐块</button>' +
+        '<button data-apply="' + id + '" class="primary">应用</button>' +
+        '<button data-copy="' + id + '">复制</button>' +
+        '<button data-insert="' + id + '">插入</button>';
+      if (isShell) btns = '<button data-run="' + id + '" class="primary">Run</button>' + btns;
+      return '<div class="code"><div class="codeHead"><span>' + esc(b.lang) + '</span>' +
+        '<span class="spacer"></span>' + btns +
+        '</div><pre><code data-code="' + id + '">' + code + '</code></pre></div>';
+    });
+    window.__codeCache = window.__codeCache || {};
+    blocks.forEach(function (b) { window.__codeCache[b.id] = b.code; });
+    return s;
+  }
+
+  chatEl.addEventListener('click', function (e) {
+    var t = e.target;
+    if (!t || t.tagName !== 'BUTTON') return;
+    var cid = t.getAttribute('data-copy');
+    var iid = t.getAttribute('data-insert');
+    var aid = t.getAttribute('data-apply');
+    var rid = t.getAttribute('data-run');
+    var did = t.getAttribute('data-diff');
+    var hid = t.getAttribute('data-hunkdiff');
+    var code = null;
+    if (cid || iid || aid || rid || did || hid) code = (window.__codeCache || {})[cid || iid || aid || rid || did || hid];
+    if (rid) {
+      vscode.postMessage({ type: 'runCommand', code: code || '' });
+    } else if (did) {
+      vscode.postMessage({ type: 'diffCode', code: code || '' });
+    } else if (hid) {
+      vscode.postMessage({ type: 'hunkDiff', code: code || '' });
+    } else if (aid) {
+      vscode.postMessage({ type: 'applyCode', code: code || '' });
+    } else if (cid) {
+      navigator.clipboard.writeText(code || '').then(function () { toast('已复制'); },
+        function () { vscode.postMessage({ type: 'copy', code: code || '' }); });
+    } else if (iid) {
+      vscode.postMessage({ type: 'insert', code: code || '' });
+    }
+  });
+
+  // ===== 输入框上方状态栏（TRAE 式：工作进度 + 轮换提示，空闲时隐藏） =====
+  var stBar = document.createElement('div');
+  stBar.id = 'stBar';
+  stBar.style.display = 'none';
+  stBar.innerHTML = '<div class="stLine"><span class="spin"></span><span class="stTxt" id="stTxt">正在思考</span></div>' +
+    '<div class="stTip" id="stTip"></div>';
+  // 插到 composer 前（侧栏顶部下方、chat 面板上方）
+  document.body.insertBefore(stBar, document.getElementById('composer'));
+
+  var ST_TIPS = [
+    '排查模块问题时，在输入框用 @ 引用文件夹，让 AI 聚焦范围。',
+    '从脚手架开始，别让 AI 从零搭。',
+    '描述问题时带上报错原文和复现步骤，定位更快。',
+    '大改动前先让 AI 给出修改计划，确认后再动手。',
+    '在文件上右键可把它加入对话上下文。'
+  ];
+  var stTipIdx = 0, stTipTimer = 0;
+  function stBarShow(text) {
+    var t = document.getElementById('stTxt');
+    if (t && text) t.textContent = text;
+    stBar.style.display = 'block';
+    if (!stTipTimer) {
+      var tip = document.getElementById('stTip');
+      if (tip) tip.textContent = ST_TIPS[stTipIdx % ST_TIPS.length];
+      stTipTimer = setInterval(function () {
+        stTipIdx++;
+        var tp = document.getElementById('stTip');
+        if (tp) tp.textContent = ST_TIPS[stTipIdx % ST_TIPS.length];
+      }, 8000);
+    }
+  }
+  function stBarSet(text) {
+    var t = document.getElementById('stTxt');
+    if (t) t.textContent = text;
+  }
+  function stBarHide() {
+    stBar.style.display = 'none';
+    if (stTipTimer) { clearInterval(stTipTimer); stTipTimer = 0; }
+  }
+
+  var AV_USER = '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="8" r="3.4"/><path d="M5.6 20c.7-3.4 3.3-5.2 6.4-5.2s5.7 1.8 6.4 5.2"/></svg>';
+
+  /* ---------- 消息渲染 ---------- */
+  function addUser(text, ref) {
+    clearEmpty();
+    var wrap = document.createElement('div');
+    wrap.className = 'msg user';
+    var b = document.createElement('div');
+    b.className = 'ububble';
+    b.textContent = (ref ? '📎 ' + ref + '\n' : '') + text;
+    wrap.appendChild(b);
+    // 用户头像固定在气泡右侧
+    var ua = document.createElement('div');
+    ua.className = 'uav';
+    ua.innerHTML = AV_USER;
+    wrap.appendChild(ua);
+    chatEl.appendChild(wrap);
+    scrollBottom();
+  }
+
+  function addAssistant(text, ms, steps) {
+    clearEmpty();
+    var wrap = document.createElement('div');
+    wrap.className = 'msg ai';
+    var head = document.createElement('div');
+    head.className = 'aiHead';
+    head.innerHTML = '<span class="av"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="3.5" y="4.5" width="17" height="15" rx="3"/><path d="M8 10.5l2.6 2.4L8 15.3M13.6 15.3H16"/></svg></span>' +
+      '<span class="nm">wasily</span>';
+    var body = document.createElement('div');
+    body.className = 'md';
+    body.innerHTML = renderMarkdown(text);
+    var acts = document.createElement('div');
+    acts.className = 'aiActions';
+    acts.innerHTML =
+      '<button data-copyall="1" title="复制"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><rect x="8.5" y="8.5" width="11" height="11" rx="2"/><path d="M15.5 8.5V6.2A1.7 1.7 0 0 0 13.8 4.5H6.2A1.7 1.7 0 0 0 4.5 6.2v7.6a1.7 1.7 0 0 0 1.7 1.7H8.5"/></svg></button>' +
+      '<button data-check="1" title="AI 自检"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><path d="M12 3.5 19 6v6.2c0 4.2-3 6.8-7 8.3-4-1.5-7-4.1-7-8.3V6z"/><path d="M9.2 12.2l2 2 3.6-3.9"/></svg></button>' +
+      '<button data-good="1" title="回答有帮助"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><path d="M7 20V10.5l4.4-6.2c.6-.9 2-.5 2 .6V9h4.4c1.2 0 2 1.1 1.8 2.2l-1.2 6.6A2.2 2.2 0 0 1 16.2 20z"/><path d="M7 10.5H4.2V20H7"/></svg></button>' +
+      '<button data-bad="1" title="回答有问题"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><path d="M17 4v9.5L12.6 19.7c-.6.9-2 .5-2-.6V15H6.2c-1.2 0-2-1.1-1.8-2.2l1.2-6.6A2.2 2.2 0 0 1 7.8 4z"/><path d="M17 13.5h2.8V4H17"/></svg></button>';
+    wrap.appendChild(head);
+    // 过程流容器：从对话根移入当前消息内，由「任务耗时」条控制折叠
+    var procWrap = document.getElementById('procWrap');
+    var meta = null;
+    if (typeof ms === 'number' && ms > 0) {
+      meta = document.createElement('div');
+      meta.className = 'aiMeta';
+      meta.innerHTML = '任务耗时 ' + fmtMs(ms) + ' <span class="cv">›</span>';
+      // 点击耗时条：展开/收起完整思考+执行过程
+      meta.addEventListener('click', function () {
+        if (!procWrap) return;
+        var open = procWrap.classList.toggle('open');
+        meta.classList.toggle('open', open);
+        scrollBottom();
+      });
+      wrap.appendChild(meta);
+    }
+    // 把生成期间的 procWrap 挪进本条消息；没有则用 steps 现场构造
+    if (procWrap) {
+      procWrap.removeAttribute('id');   // 释放 id，避免下一轮 addThinking 的 getElementById 命中旧节点
+      procWrap.classList.remove('live', 'fold');   // 结束后默认隐藏，由耗时条控制
+      // 清空生成期的实时内容，用服务端返回的 steps 重渲染（统计头 + 思考/工具序列）
+      var olds = procWrap.querySelectorAll('.procFlow, .procTally, #procStatus, #thinkingRow');
+      for (var oi = 0; oi < olds.length; oi++) olds[oi].remove();
+      if (steps && steps.length) renderProcSteps(steps, procWrap);
+      // body 此时还未挂到 wrap，只能用 appendChild；用 insertBefore(procWrap, body) 会抛 NotFoundError
+      wrap.appendChild(procWrap);
+    } else if (steps && steps.length) {
+      // 无过程容器（如历史回放）：现场建一个折叠的
+      procWrap = document.createElement('div');
+      procWrap.className = 'procWrap';
+      renderProcSteps(steps, procWrap);
+      wrap.appendChild(procWrap);
+    }
+    wrap.appendChild(body); wrap.appendChild(acts);
+    chatEl.appendChild(wrap);
+    acts.addEventListener('click', function (e) {
+      var btn = e.target.closest ? e.target.closest('button') : null;
+      if (!btn) return;
+      if (btn.getAttribute('data-copyall')) {
+        navigator.clipboard.writeText(text || '');
+        toast('已复制');
+      } else if (btn.getAttribute('data-check')) {
+        vscode.postMessage({ type: 'selfcheck' });
+      } else {
+        toast(btn.getAttribute('data-good') ? '已记录：回答有帮助' : '已记录：回答有问题');
+      }
+    });
+    scrollBottom();
+    return wrap;
+  }
+
+  function fmtMs(ms) {
+    var s = Math.round(ms / 1000);
+    if (s < 60) return s + 's';
+    var m = Math.floor(s / 60);
+    if (m < 60) return m + 'm ' + (s % 60) + 's';
+    return Math.floor(m / 60) + 'h ' + (m % 60) + 'm';
+  }
+
+  /* ---------- 任务编排卡片（人物分工 + 任务模块 + agent/skill + 工具准备） ---------- */
+  var ORCH_ICO = { pending: '⏳', running: '🔄', done: '✅', failed: '❌' };
+
+  function addOrchCard(plan) {
+    if (!plan || !plan.steps) return;
+    clearEmpty();
+    var card = document.createElement('div');
+    card.className = 'orch-card';
+    var people = plan.people || [];
+    card.innerHTML =
+      '<div class="oc-title"><span class="oc-label">🧠 任务编排（待确认）</span>' +
+      '<span class="oc-count">' + people.length + ' 位角色 · ' + plan.steps.length + ' 个任务</span></div>' +
+      '<div class="oc-goal">目标：' + esc(plan.goal || '') + '</div>' +
+      '<div class="oc-people">' + people.map(function (p) {
+        return '<span class="oc-person" title="' + esc(p.duty || '') + '">' +
+          (p.emoji || '👤') + esc(p.name || '') +
+          '<span class="du">' + esc(p.agent || '') + '</span></span>';
+      }).join('') + '</div>' +
+      '<div class="oc-steps"></div>' +
+      '<div class="oc-btns"><button class="go">✓ 确认执行</button>' +
+      '<button class="cancel">✗ 取消</button></div>' +
+      '<div class="oc-state" style="display:none"></div>';
+
+    var stepsEl = card.querySelector('.oc-steps');
+    var labelEl = card.querySelector('.oc-label');
+    var stateEl = card.querySelector('.oc-state');
+    var btns = card.querySelectorAll('.oc-btns button');
+    var goBtn = btns[0], cancelBtn = btns[1];
+
+    function renderSteps(steps) {
+      stepsEl.innerHTML = steps.map(function (s) {
+        var tags = [];
+        if (s.agent) tags.push('<span class="oc-tag agent">' + (s.emoji || '') + esc(s.agent) + '</span>');
+        if (s.skill) tags.push('<span class="oc-tag skill">⚡ ' + esc(s.skill) + '</span>');
+        (s.tools_state || []).forEach(function (t) {
+          tags.push('<span class="oc-tag ' + esc(t.status) + '" title="' + esc(t.detail || '') + '">' +
+            esc(t.tool) + '</span>');
+        });
+        if (!s.tools_state && (s.tools || []).length) {
+          s.tools.forEach(function (n) { tags.push('<span class="oc-tag">' + esc(n) + '</span>'); });
+        }
+        return '<div class="oc-step ' + esc(s.status) + '">' +
+          '<span class="oi">' + (ORCH_ICO[s.status] || '⏳') + '</span>' +
+          '<div style="flex:1;min-width:0">' +
+            '<span class="okind">' + esc(s.kind || '任务') + '</span>' +
+            '<span class="ot">' + s.id + '. ' + esc(s.title) + '</span>' +
+            '<span style="color:var(--sub2);font-size:10px;margin-left:5px">' +
+              esc(s.agent_name || s.person || '') + '</span>' +
+            (s.detail ? '<div class="odet">' + esc(s.detail) + '</div>' : '') +
+            (tags.length ? '<div class="oc-tags">' + tags.join('') + '</div>' : '') +
+          '</div></div>';
+      }).join('');
+    }
+
+    renderSteps(plan.steps);
+    chatEl.appendChild(card);
+    scrollBottom();
+
+    function decide(action) {
+      goBtn.disabled = cancelBtn.disabled = true;
+      return api('/plan/confirm', 'POST', { plan_id: plan.id, action: action }, 10000);
+    }
+
+    cancelBtn.onclick = function () {
+      decide('cancel').then(function () {
+        labelEl.textContent = '🧠 任务编排（已取消）';
+        stateEl.style.display = 'block';
+        stateEl.textContent = '已取消，可继续对话调整需求后重新编排。';
+      });
+    };
+
+    goBtn.onclick = function () {
+      decide('approve').then(function () {
+        labelEl.textContent = '🧠 任务编排（执行中）';
+        stateEl.style.display = 'block';
+        stateEl.textContent = '已确认，各角色开始按分工执行…';
+        poll(plan.id);
+      });
+    };
+
+    function poll(pid) {
+      api('/plan/status?id=' + encodeURIComponent(pid), 'GET', null, 10000).then(function (r) {
+        var p = r && r.data;
+        if (p && p.steps) renderSteps(p.steps);
+        if (p && (p.status === 'done' || p.status === 'failed' || p.status === 'canceled')) {
+          labelEl.textContent = p.status === 'done' ? '🧠 任务编排（已完成）'
+            : p.status === 'failed' ? '🧠 任务编排（有任务失败）' : '🧠 任务编排（已取消）';
+          stateEl.textContent = p.status === 'done' ? '全部任务执行完成' : '执行结束，详情见下方总结';
+          if (p.summary) addAssistant(p.summary, 0);
+          return;
+        }
+        setTimeout(function () { poll(pid); }, 2000);
+      });
+    }
+  }
+
+  var thinkLines = [];
+  var liveToolSteps = [];   // 本轮已完成的工具步骤（驱动实时汇总行）
+
+  // 思考过程（TRAE 式）：顶部汇总行 + 时间线（思考折叠行/工具卡片交替）+ 底部状态行
+  function addThinking() {
+    clearEmpty();
+    var wrap = document.createElement('div');
+    wrap.className = 'procWrap live';
+    wrap.id = 'procWrap';
+    // 顶部汇总行（实时更新：已读取 N 个文件，搜索 N 次文件，执行 N 条命令）
+    var tal = document.createElement('div');
+    tal.className = 'procTally';
+    tal.id = 'liveTally';
+    tal.innerHTML = '<span class="txt">开始处理任务</span><span class="cv">⌄</span>';
+    tal.addEventListener('click', function () {
+      wrap.classList.toggle('fold');
+    });
+    // 时间线容器
+    var flow = document.createElement('div');
+    flow.className = 'procFlow';
+    flow.id = 'liveFlow';
+    // 底部状态行（正在思考 / 正在规划下一步）
+    var st = document.createElement('div');
+    st.className = 'procStatus';
+    st.id = 'procStatus';
+    st.innerHTML = '<span class="spin"></span><span class="txt">正在思考</span>';
+    wrap.appendChild(tal);
+    wrap.appendChild(flow);
+    wrap.appendChild(st);
+    chatEl.appendChild(wrap);
+    thinkLines = [];
+    liveToolSteps = [];
+    scrollBottom();
+    return wrap;
+  }
+
+  // 实时汇总行文案
+  function updateLiveTally() {
+    var tal = document.getElementById('liveTally');
+    if (!tal) return;
+    var txt = tal.querySelector('.txt');
+    if (!txt) return;
+    var parts = tallyParts(liveToolSteps);
+    txt.textContent = parts.length ? parts.join('，') : '开始处理任务';
+  }
+
+  // 底部状态行文案（同步输入框上方状态栏）
+  function setProcStatus(text) {
+    var st = document.getElementById('procStatus');
+    if (st) {
+      var t = st.querySelector('.txt');
+      if (t) t.textContent = text;
+    }
+    stBarSet(text);
+    scrollBottom();
+  }
+
+  /* ---------- 流式回答：逐字上屏（工具调用轮自动撤回） ---------- */
+  var liveWrap = null, liveBody = null, liveText = '', liveQueue = '', liveTimer = 0;
+
+  function streamStart() {
+    if (liveWrap) return;
+    clearEmpty();
+    liveWrap = document.createElement('div');
+    liveWrap.className = 'msg ai';
+    var head = document.createElement('div');
+    head.className = 'aiHead';
+    head.innerHTML = '<span class="av"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="3.5" y="4.5" width="17" height="15" rx="3"/><path d="M8 10.5l2.6 2.4L8 15.3M13.6 15.3H16"/></svg></span>' +
+      '<span class="nm">wasily</span>' +
+      '<span style="font-size:11px;color:var(--sub2);margin-left:8px">生成中…</span>';
+    liveBody = document.createElement('div');
+    liveBody.className = 'md';
+    liveWrap.appendChild(head);
+    liveWrap.appendChild(liveBody);
+    chatEl.appendChild(liveWrap);
+    scrollBottom();
+  }
+
+  // 增量文字入队，50ms 批量渲染一次，避免逐 token 重排卡顿
+  function streamPush(text) {
+    if (!text) return;
+    streamStart();
+    liveQueue += text;
+    if (liveTimer) return;
+    liveTimer = setTimeout(function () {
+      liveTimer = 0;
+      if (!liveBody) return;
+      liveText += liveQueue;
+      liveQueue = '';
+      liveBody.innerHTML = renderMarkdown(liveText);
+      scrollBottom();
+    }, 50);
+  }
+
+  // 本轮其实是工具调用：把已吐出的文字转为「思考」行后清空气泡
+  function streamReset() {
+    var t = liveText.trim();
+    if (liveTimer) { clearTimeout(liveTimer); liveTimer = 0; }
+    liveText = ''; liveQueue = '';
+    if (liveBody) liveBody.innerHTML = '';
+    if (t) thinkStep(t.length > 200 ? t.slice(0, 200) + '…' : t);
+  }
+
+  function streamEnd() {
+    if (liveTimer) { clearTimeout(liveTimer); liveTimer = 0; }
+    liveText = ''; liveQueue = ''; liveBody = null;
+    if (liveWrap && liveWrap.parentNode) liveWrap.parentNode.removeChild(liveWrap);
+    liveWrap = null;
+  }
+
+  // TRAE 式「思考」折叠行：每段思考一行，点击展开全文
+  function thinkStep(text, running, key) {
+    var flow = document.getElementById('liveFlow');
+    if (!flow || !text) return;
+    var k = key || text.slice(0, 40);
+    for (var i = 0; i < thinkLines.length; i++) {
+      if (thinkLines[i].key === k) return;
+    }
+    var st = document.createElement('div');
+    st.className = 'procStep think';
+    st.innerHTML =
+      '<div class="procStepHead">' + PROC_ICONS.think + '<span class="lbl">思考</span>' +
+      '<span class="cv">⌄</span></div>' +
+      '<div class="procStepBody"><div class="tx">' + esc(text) + '</div></div>';
+    st.querySelector('.procStepHead').addEventListener('click', function () {
+      st.classList.toggle('open');
+    });
+    flow.appendChild(st);
+    thinkLines.push({ key: k, el: st });
+    scrollBottom();
+  }
+
+  // 工具名 → 摘要分类（对齐 Trae：按类别聚合，而非逐个工具罗列）
+  var PROC_TOOL_KINDS = {
+    read:   ['file_read', 'code_read', 'self_read', 'read_file', 'read_files', 'file_read_many'],
+    search: ['file_search', 'code_search', 'grep', 'search_files'],
+    list:   ['file_list', 'self_list', 'list_files'],
+    edit:   ['file_write', 'apply_patch', 'self_write', 'self_edit', 'file_copy', 'file_move', 'file_delete', 'write_file', 'edit_file'],
+    cmd:    ['shell_exec', 'shell_admin', 'run_python', 'process_start', 'run_command', 'execute_command'],
+    browser:['screenshot', 'browser', 'browser_use', 'open_url']
+  };
+  function procKindOf(name) {
+    var n = String(name || '').toLowerCase();
+    if (!n) return null;
+    for (var k in PROC_TOOL_KINDS) {
+      if (PROC_TOOL_KINDS[k].indexOf(n) >= 0) return k;
+    }
+    return 'other';
+  }
+  function baseName(p) {
+    var s = String(p || '').replace(/\\/g, '/');
+    var parts = s.split('/');
+    return parts[parts.length - 1] || s;
+  }
+  var PROC_ICONS = {
+    think:   '<span class="ico"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="8.2"/><path d="M12 11v4.5"/><circle cx="12" cy="7.8" r="1" fill="currentColor" stroke="none"/></svg></span>',
+    read:    '<span class="ico"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><circle cx="9" cy="12" r="4.4"/><circle cx="15" cy="12" r="4.4"/></svg></span>',
+    search:  '<span class="ico"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><circle cx="9" cy="12" r="4.4"/><circle cx="15" cy="12" r="4.4"/></svg></span>',
+    list:    '<span class="ico"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><circle cx="9" cy="12" r="4.4"/><circle cx="15" cy="12" r="4.4"/></svg></span>',
+    edit:    '<span class="ico"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M13.6 5.4l4.9 4.9M5 19l1-4.2L15.2 5.6a1.7 1.7 0 0 1 2.4 0l.8.8a1.7 1.7 0 0 1 0 2.4L9.2 18z"/></svg></span>',
+    cmd:     '<span class="ico"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><rect x="3.5" y="4.5" width="17" height="15" rx="2.5"/><path d="M7.5 10l2.6 2.2-2.6 2.2M12.8 14.6h3.8"/></svg></span>',
+    browser: '<span class="ico"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><rect x="3.2" y="5" width="17.6" height="12.2" rx="2"/><path d="M9 20.8h6"/></svg></span>',
+    other:   '<span class="ico"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M14.8 6.2a3.8 3.8 0 0 0 5 5l-8.4 8.4a2.2 2.2 0 0 1-3.1-3.1z"/></svg></span>'
+  };
+  function procRowLabel(tool, args, result) {
+    var kind = procKindOf(tool);
+    var a = args || {};
+    var path = a.path || a.file || a.filename || a.target || a.dst || '';
+    if (kind === 'read') return { ico: 'read', label: '已读取', detail: baseName(path) || String(tool) };
+    if (kind === 'list') return { ico: 'list', label: '已读取目录', detail: String(a.path || path || '.').replace(/\\/g, '/') };
+    if (kind === 'edit') return { ico: 'edit', label: '已编辑', detail: baseName(path) || String(tool) };
+    if (kind === 'search') {
+      var hits = String(result || '').split('\n').filter(function (x) { return x.trim(); }).length;
+      if (/未找到|没有找到|No results|not found|0 个/i.test(result || '') || !hits) {
+        return { ico: 'search', label: '未找到结果', detail: String(a.query || a.pattern || a.directory || '') };
+      }
+      return { ico: 'search', label: '找到 ' + hits + ' 行', detail: String(a.query || a.pattern || '') };
+    }
+    if (kind === 'cmd') {
+      var cmd = String(a.command || a.cmd || a.code || '').split('\n')[0];
+      if (cmd.length > 60) cmd = cmd.slice(0, 60) + '…';
+      return { ico: 'cmd', label: '命令已执行', detail: cmd };
+    }
+    if (kind === 'browser') return { ico: 'browser', label: 'Browser Use Agent 已操作浏览器', detail: '' };
+    return { ico: 'other', label: '已调用', detail: String(tool) };
+  }
+
+  // 统计头文案（Trae 式：已编辑 N 个文件，读取 N 个文件…）
+  function tallyParts(list) {
+    var cnt = { edit: 0, read: 0, search: 0, list: 0, cmd: 0, browser: 0, other: 0 };
+    (list || []).forEach(function (s) {
+      if (s && s.tool) { var k = procKindOf(s.tool); if (k) cnt[k]++; }
+    });
+    var parts = [];
+    if (cnt.edit) parts.push('已编辑 ' + cnt.edit + ' 个文件');
+    if (cnt.read) parts.push('读取 ' + cnt.read + ' 个文件');
+    if (cnt.search) parts.push('搜索 ' + cnt.search + ' 次');
+    if (cnt.list) parts.push('读取 ' + cnt.list + ' 个目录');
+    if (cnt.cmd) parts.push('执行 ' + cnt.cmd + ' 条命令');
+    if (cnt.browser) parts.push('操作浏览器 ' + cnt.browser + ' 次');
+    if (cnt.other) parts.push('调用 ' + cnt.other + ' 次工具');
+    return parts;
+  }
+
+  // 把服务端 steps（think/tool 交替）渲染为「思考→执行→检测」折叠流
+  function renderProcSteps(steps, host) {
+    if (!steps || !steps.length) return null;
+    var frag = document.createDocumentFragment();
+    var n = 0, thinkN = 0, toolN = 0;
+    steps.forEach(function (s) {
+      n++;
+      if (s.think) {
+        thinkN++;
+        var st = document.createElement('div');
+        st.className = 'procStep think';
+        st.innerHTML =
+          '<div class="procStepHead">' + PROC_ICONS.think + '<span class="lbl">思考</span>' +
+          '<span class="cv">⌄</span></div>' +
+          '<div class="procStepBody"><div class="tx">' + esc(s.think) + '</div></div>';
+        st.querySelector('.procStepHead').addEventListener('click', function () {
+          st.classList.toggle('open');
+        });
+        frag.appendChild(st);
+      } else if (s.tool) {
+        toolN++;
+        var toolArgs = s.args || {};
+        var argsStr = '';
+        try { argsStr = JSON.stringify(toolArgs, null, 2); } catch (e) { argsStr = String(toolArgs); }
+        var result = String(s.result || '');
+        var isFail = /^(错误|执行失败|Error|error|失败)/.test(result);
+        var pl = procRowLabel(s.tool, toolArgs, result);
+        var kind = procKindOf(s.tool);
+        var isLeaf = (kind === 'read' || kind === 'search' || kind === 'list');
+        var st = document.createElement('div');
+        st.className = 'procStep tool' + (isLeaf ? ' leaf' : '');
+        st.innerHTML =
+          '<div class="procStepHead">' + PROC_ICONS[pl.ico] +
+          '<span class="lbl">' + esc(pl.label) + '</span>' +
+          (pl.detail ? '<span class="cmd">' + esc(pl.detail) + '</span>' : '') +
+          (isLeaf ? '' : '<span class="cv">⌄</span>') + '</div>' +
+          (isLeaf ? '' :
+          '<div class="procStepBody">' +
+            '<div class="args">参数：<pre style="margin:2px 0 0;white-space:pre-wrap;word-break:break-word;font-size:10.5px">' + esc(argsStr) + '</pre></div>' +
+            '<div class="args ' + (isFail ? 'resFail' : 'resOk') + '">结果：' +
+              (isFail ? '失败' : '成功') + '</div>' +
+            '<div class="resultTxt">' + esc(result.length > 1500 ? result.slice(0, 1500) + '\n…（已截断，原始 ' + result.length + ' 字符）' : result) + '</div>' +
+          '</div>');
+        if (!isLeaf) {
+          st.querySelector('.procStepHead').addEventListener('click', function () {
+            st.classList.toggle('open');
+          });
+        }
+        frag.appendChild(st);
+      } else if (s.skill) {
+        var st = document.createElement('div');
+        st.className = 'procStep think';
+        st.innerHTML =
+          '<div class="procStepHead"><span class="lbl">命中技能</span>' +
+          '<span class="cv">⌄</span></div>' +
+          '<div class="procStepBody"><div class="tx">已调用技能：' + esc(s.skill) + '</div></div>';
+        st.querySelector('.procStepHead').addEventListener('click', function () {
+          st.classList.toggle('open');
+        });
+        frag.appendChild(st);
+      }
+    });
+    if (n === 0) return null;
+    var box = document.createElement('div');
+    box.className = 'procFlow';
+    box.appendChild(frag);
+    // 顶部统计头（Trae 式：已编辑 N 个文件，读取 N 个文件…）
+    var parts = tallyParts(steps);
+    if (parts.length && host) {
+      var tal = document.createElement('div');
+      tal.className = 'procTally static';
+      tal.innerHTML = '<span class="txt">' + esc(parts.join('，')) + '</span><span class="cv">⌄</span>';
+      host.appendChild(tal);
+    }
+    if (host) host.appendChild(box);
+    return { thinkN: thinkN, toolN: toolN };
+  }
+
+  function renderPorts(rows) {
+    if (!rows.length) {
+      portTb.innerHTML = '<tr><td colspan="4" style="color:#8b8f9a">没有可探测的端口</td></tr>';
+      return;
+    }
+    portTb.innerHTML = rows.map(function (r) {
+      return '<tr class="row" data-port="' + r.port + '">' +
+        '<td>' + r.port + '</td>' +
+        '<td>' + esc(r.label || '') + '</td>' +
+        '<td class="' + (r.online ? 'auto' : 'off') + '">' + (r.online ? '自动转发' : '—') + '</td>' +
+        '<td class="' + (r.online ? 'on' : 'off') + '">' + (r.online ? '● 运行中' : '○ 未启动') + '</td>' +
+        '</tr>';
+    }).join('');
+  }
+
+  function addChanges(files) {
+    if (pendingChangesEl && pendingChangesEl.parentNode) {
+      pendingChangesEl.parentNode.removeChild(pendingChangesEl);
+      pendingChangesEl = null;
+    }
+    if (!files || !files.length) return;
+    var add = 0, del = 0;
+    files.forEach(function (f) { add += f.add || 0; del += f.del || 0; });
+    var card = document.createElement('div');
+    card.className = 'changes';
+    var head = document.createElement('div');
+    head.className = 'changesHead';
+    head.innerHTML =
+      '<span class="docIco"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><path d="M14 3.5H7.2A1.7 1.7 0 0 0 5.5 5.2v13.6a1.7 1.7 0 0 0 1.7 1.7h9.6a1.7 1.7 0 0 0 1.7-1.7V8z"/><path d="M14 3.5V8h5.5M8.8 13h6.4M8.8 16.4h6.4"/></svg></span>' +
+      '<span class="ct">' + files.length + ' 个文件已更改</span><span class="cv">⌃</span>' +
+      '<span class="spacer"></span>' +
+      '<span class="plus">+' + add + '</span> <span class="minus">-' + del + '</span>' +
+      '<span class="vsep"></span>' +
+      '<button class="expand" title="在源代码管理中查看"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><path d="M14 5h5v5M19 5l-7.5 7.5"/><path d="M18 14.5v3.8a1.7 1.7 0 0 1-1.7 1.7H5.7A1.7 1.7 0 0 1 4 18.3V7.7A1.7 1.7 0 0 1 5.7 6h3.8"/></svg></button>';
+    card.appendChild(head);
+    var bodyEl = document.createElement('div');
+    bodyEl.className = 'changesBody';
+    files.forEach(function (f) {
+      var name = String(f.path).split(/[\\/]/).pop();
+      var dir = String(f.path).replace(/[\\/][^\\/]+$/, '');
+      var row = document.createElement('div');
+      row.className = 'fileRow';
+      row.innerHTML = '<span class="fp" title="' + esc(f.path) + '">' + esc(name) +
+        ' <span class="st">' + esc(dir) + '</span></span>' +
+        '<span class="plus">+' + (f.add || 0) + '</span>' +
+        '<span class="minus">-' + (f.del || 0) + '</span>' +
+        '<button class="fo" data-open="' + esc(f.path) + '">查看</button>' +
+        '<button class="fo" data-accept="' + esc(f.path) + '">接受</button>' +
+        '<button class="fo" data-reject="' + esc(f.path) + '">拒绝</button>';
+      bodyEl.appendChild(row);
+    });
+    var foot = document.createElement('div');
+    foot.className = 'changesFoot';
+    foot.innerHTML = '<button class="acc" data-all="accept">全部接受</button>' +
+      '<button data-all="reject">拒绝全部</button>';
+    bodyEl.appendChild(foot);
+    card.appendChild(bodyEl);
+    head.addEventListener('click', function (e) {
+      if (e.target.closest && e.target.closest('.expand')) {
+        vscode.postMessage({ type: 'openScm' });
+        return;
+      }
+      card.classList.toggle('open');
+      var cv = head.querySelector('.cv');
+      if (cv) cv.textContent = card.classList.contains('open') ? '⌄' : '⌃';
+    });
+    card.addEventListener('click', function (e) {
+      var b = e.target;
+      if (!b || b.tagName !== 'BUTTON') return;
+      var p = b.getAttribute('data-open');
+      var a = b.getAttribute('data-accept');
+      var r = b.getAttribute('data-reject');
+      var all = b.getAttribute('data-all');
+      if (p) vscode.postMessage({ type: 'openDiff', path: p });
+      else if (a) vscode.postMessage({ type: 'acceptChanges', paths: [a] });
+      else if (r) vscode.postMessage({ type: 'rejectChanges', paths: [r] });
+      else if (all === 'accept') vscode.postMessage({ type: 'acceptChanges', paths: files.map(function (f) { return f.path; }) });
+      else if (all === 'reject') vscode.postMessage({ type: 'rejectChanges', paths: files.map(function (f) { return f.path; }) });
+    });
+    chatEl.appendChild(card);
+    pendingChangesEl = card;
+    scrollBottom();
+  }
+
+  /* ---------- 已附加上下文 chips ---------- */
+  function renderPending(value) {
+    refChip.innerHTML = '';
+    var items = (value && value.items) ? value.items
+      : (value && value.name ? [{ name: value.name }] : []);
+    if (!items.length) { refChip.style.display = 'none'; return; }
+    refChip.style.display = 'flex';
+    items.forEach(function (it) {
+      var chip = document.createElement('span');
+      chip.className = 'ctxChip';
+      var n = document.createElement('span');
+      n.className = 'n';
+      n.textContent = (it.dir ? '📁 ' : '📄 ') + (it.name || '');
+      n.title = it.path || '';
+      chip.appendChild(n);
+      if (it.truncated) {
+        var cut = document.createElement('span');
+        cut.className = 'cut';
+        cut.textContent = '已截断';
+        chip.appendChild(cut);
+      }
+      var x = document.createElement('button');
+      x.textContent = '✕';
+      x.title = '移除';
+      x.addEventListener('click', function () {
+        vscode.postMessage({ type: 'removePending', path: it.path });
+      });
+      chip.appendChild(x);
+      refChip.appendChild(chip);
+    });
+  }
+
+  /* ---------- 校对员 AI ---------- */
+  var reviewMap = {};
+  function textKey(s) {
+    var h = 0;
+    for (var i = 0; i < s.length; i++) h = (h * 31 + s.charCodeAt(i)) | 0;
+    return 'r' + h;
+  }
+
+  function addReviewCard(text, rv, anchorIdx) {
+    clearEmpty();
+    var card = document.createElement('div');
+    card.className = 'revCard';
+    var head = document.createElement('div');
+    head.className = 'revHead';
+    head.innerHTML = '<span class="rvName">校对员 AI</span><span class="rvCnt">' +
+      (rv.issues.length ? '发现 ' + rv.issues.length + ' 处可改进' : '未发现错别字') +
+      '</span><span class="spacer"></span>';
+    if (rv.issues.length) {
+      var btn = document.createElement('button');
+      btn.textContent = '采用修正';
+      btn.addEventListener('click', function () {
+        inputEl.value = rv.corrected || text;
+        inputEl.dispatchEvent(new Event('input', { bubbles: true }));
+        inputEl.focus();
+        toast('已填入修正后的表述');
+      });
+      head.appendChild(btn);
+    }
+    var body = document.createElement('div');
+    body.className = 'revBody';
+    rv.issues.forEach(function (it) {
+      var line = document.createElement('div');
+      line.className = 'revLine';
+      line.innerHTML = '· ' + esc(it.type || '表达') + '：<b>' + esc(it.from || '') +
+        '</b> → <b class="to">' + esc(it.to || '') + '</b>' +
+        (it.note ? ' <span>' + esc(it.note) + '</span>' : '');
+      body.appendChild(line);
+    });
+    if (rv.intent) {
+      var intent = document.createElement('div');
+      intent.className = 'revIntent';
+      intent.textContent = '理解意图：' + rv.intent;
+      body.appendChild(intent);
+    }
+    card.appendChild(head); card.appendChild(body);
+    // 回填到对应那条用户消息下方（模型被占用时校对结果可能晚于回答返回）
+    var anchor = null;
+    if (anchorIdx) {
+      var users = chatEl.querySelectorAll('.msg.user');
+      if (users.length >= anchorIdx) anchor = users[anchorIdx - 1];
+    }
+    if (anchor && anchor.parentNode === chatEl) {
+      chatEl.insertBefore(card, anchor.nextSibling);
+    } else {
+      chatEl.appendChild(card);
+    }
+    scrollBottom();
+    return card;
+  }
+
+  // 发送前把这条消息交给独立的校对员 AI 过一遍（异步，不阻塞发送）
+  function proofread(text, anchorIdx) {
+    // 本地模型逐条串行推理，排在回答之后时可能较久，超时放宽
+    api('/proofread', 'POST', { text: text }, 300000).then(function (res) {
+      if (!res.ok || !res.data || !res.data.ok) return;
+      var d = res.data;
+      var rv = { issues: d.issues || [], corrected: d.corrected || text, intent: d.intent || '' };
+      if (!rv.issues.length && !rv.intent) return;
+      reviewMap[textKey(text)] = rv;
+      addReviewCard(text, rv, anchorIdx);
+    });
+  }
+
+  function renderAll(sid, messages) {
+    currentSid = sid;
+    chatEl.innerHTML = '';
+    if (!messages || !messages.length) {
+      chatEl.innerHTML = '<div class="empty" id="empty">选好访问权限与模式，直接描述任务。<br>AI 可读写文件、执行命令，改动会以文件卡片呈现，可逐个接受或拒绝。</div>';
+      return;
+    }
+    messages.forEach(function (m) {
+      if (m.role === 'user') {
+        addUser(m.display || m.content, m.ref);
+        var rv = reviewMap[textKey(m.display || m.content || '')];
+        if (rv) addReviewCard(m.display || '', rv);
+      } else {
+        addAssistant(m.content);
+      }
+    });
+    scrollBottom();
+  }
+
+  /* ---------- 生成状态 ---------- */
+  function setGenerating(on) {
+    generating = on;
+    sendBtn.disabled = on;
+    stopBtn.style.display = on ? 'flex' : 'none';
+    if (on) {
+      stBarShow('正在思考');
+    } else {
+      // 结束：隐藏输入框上方状态栏，移除时间线底部状态行
+      stBarHide();
+      var st = document.getElementById('procStatus');
+      if (st && st.parentNode) st.parentNode.removeChild(st);
+    }
+  }
+
+  function applyPhase(phase, tool) {
+    var map = {
+      think: '正在思考', tool: '正在规划下一步', memory: '检索长期记忆',
+      prefill: '正在理解输入', decode: '正在规划下一步', idle: '就绪'
+    };
+    setProcStatus(map[phase] || '正在思考');
+  }
+
+  /* ---------- 实时工具事件流（TRAE 式：逐次调用上屏，含参数与耗时） ---------- */
+  var toolEvTimer = 0, toolEvSince = 0, toolEvGenStart = 0, lvLastRow = null;
+
+  function startToolEvPoll() {
+    stopToolEvPoll();
+    toolEvGenStart = Date.now() / 1000 - 2;
+    toolEvPoll();
+  }
+  function stopToolEvPoll() {
+    if (toolEvTimer) { clearTimeout(toolEvTimer); toolEvTimer = 0; }
+    lvLastRow = null;
+  }
+  function toolEvPoll() {
+    api('/tool_events?since=' + toolEvSince, 'GET', null, 6000).then(function (r) {
+      if (r && r.ok && r.data && r.data.events) {
+        r.data.events.forEach(function (ev) {
+          if ((ev.id || 0) > toolEvSince) toolEvSince = ev.id;
+          if ((ev.sid === 'vscodium' || ev.sid === 'vscodium-solo') && (ev.ts || 0) >= toolEvGenStart) {
+            liveToolEvent(ev);
+          }
+        });
+      }
+      if (generating) toolEvTimer = setTimeout(toolEvPoll, 800);
+    });
+  }
+  // 工具调用中的行标签（TRAE 式：命令执行中 / 搜索中…）
+  function procRunningLabel(tool, a) {
+    var kind = procKindOf(tool);
+    a = a || {};
+    var path = a.path || a.file || a.filename || a.target || a.dst || '';
+    if (kind === 'read') return { ico: 'read', label: '读取中', detail: baseName(path) || String(tool) };
+    if (kind === 'list') return { ico: 'list', label: '读取目录中', detail: String(a.path || path || '.').replace(/\\/g, '/') };
+    if (kind === 'edit') return { ico: 'edit', label: '编辑中', detail: baseName(path) || String(tool) };
+    if (kind === 'search') return { ico: 'search', label: '搜索中', detail: String(a.query || a.pattern || '') };
+    if (kind === 'cmd') {
+      var cmd = String(a.command || a.cmd || a.code || '').split('\n')[0];
+      if (cmd.length > 60) cmd = cmd.slice(0, 60) + '…';
+      return { ico: 'cmd', label: '命令执行中', detail: cmd };
+    }
+    if (kind === 'browser') return { ico: 'browser', label: '正在操作浏览器', detail: '' };
+    return { ico: 'other', label: '调用中', detail: String(tool) };
+  }
+
+  function liveToolEvent(ev) {
+    if (ev.type === 'think') {
+      if (ev.text) thinkStep(ev.text.length > 300 ? ev.text.slice(0, 300) + '…' : ev.text, false);
+      setProcStatus('正在规划下一步');
+      return;
+    }
+    if (ev.type === 'tool_call') {
+      var a = {};
+      try { a = JSON.parse(ev.args || '{}'); } catch (e) {}
+      var pl = procRunningLabel(ev.tool, a);
+      var kind = procKindOf(ev.tool);
+      var isLeaf = (kind === 'read' || kind === 'search' || kind === 'list');
+      var row = document.createElement('div');
+      row.className = 'procStep tool running' + (isLeaf ? ' leaf' : '');
+      row.innerHTML =
+        '<div class="procStepHead">' + PROC_ICONS[pl.ico] +
+        '<span class="lbl">' + esc(pl.label) + '</span>' +
+        (pl.detail ? '<span class="cmd">' + esc(pl.detail) + '</span>' : '') +
+        (isLeaf ? '' : '<span class="cv">⌄</span>') + '</div>' +
+        (isLeaf ? '' : '<div class="procStepBody"><div class="resultTxt">执行中…</div></div>');
+      if (!isLeaf) {
+        row.querySelector('.procStepHead').addEventListener('click', function () {
+          row.classList.toggle('open');
+        });
+      }
+      var flow = document.getElementById('liveFlow');
+      if (flow) {
+        flow.appendChild(row);
+        lvLastRow = { el: row, tool: ev.tool || '', args: a, leaf: isLeaf };
+        scrollBottom();
+      }
+    } else if (ev.type === 'tool_result') {
+      var cur = lvLastRow;
+      lvLastRow = null;
+      if (cur && cur.el && cur.el.parentNode) {
+        var result = String(ev.result || '');
+        var pl2 = procRowLabel(cur.tool, cur.args, result);
+        var head = cur.el.querySelector('.procStepHead');
+        cur.el.classList.remove('running');
+        if (head) {
+          head.innerHTML = PROC_ICONS[pl2.ico] +
+            '<span class="lbl">' + esc(pl2.label) + '</span>' +
+            (pl2.detail ? '<span class="cmd">' + esc(pl2.detail) + '</span>' : '') +
+            (cur.leaf ? '' : '<span class="cv">⌄</span>');
+        }
+        if (!cur.leaf) {
+          var isFail = ev.ok === false || /^(错误|执行失败|Error|error|失败)/.test(result);
+          var bodyEl = cur.el.querySelector('.procStepBody');
+          if (bodyEl) {
+            bodyEl.innerHTML =
+              '<div class="args ' + (isFail ? 'resFail' : 'resOk') + '">结果：' + (isFail ? '失败' : '成功') +
+              (ev.dur != null ? ' · ' + ev.dur + 's' : '') + '</div>' +
+              (result ? '<div class="resultTxt">' + esc(result.length > 1500 ? result.slice(0, 1500) + '\n…（已截断）' : result) + '</div>' : '');
+          }
+        }
+        liveToolSteps.push({ tool: cur.tool, args: cur.args, result: result });
+        updateLiveTally();
+      }
+      setProcStatus('正在规划下一步');
+    }
+  }
+
+  function applyMode(m) {
+    m = (m === 'solo') ? 'solo' : 'ide';
+    modeSel.value = m;
+    // 外部（标题栏）切到 SOLO 时，内置智能体胶囊跟随为 Agent
+    if (m === 'solo' && (curAgent === 'chat' || curAgent === 'agent')) {
+      curAgent = 'agent';
+      curAgentPrompt = '';
+      agentLabel.textContent = 'Agent';
+    }
+  }
+
+  /* ---------- 会话列表 ---------- */
+  function renderSessList(sessions, activeId) {
+    currentSid = activeId;
+    sessList.innerHTML = (sessions || []).map(function (s) {
+      return '<div class="sessRow' + (s.id === activeId ? ' on' : '') + '" data-sid="' + s.id + '">' +
+        '<span class="sn">' + esc(s.name) + '</span>' +
+        '<button class="del" data-del="' + s.id + '" title="删除">✕</button></div>';
+    }).join('') || '<div class="empty" style="padding:12px">暂无历史会话</div>';
+    document.getElementById('sessCount').textContent = (sessions || []).length + ' 条';
+  }
+  sessList.addEventListener('click', function (e) {
+    var del = e.target.getAttribute && e.target.getAttribute('data-del');
+    if (del) {
+      e.stopPropagation();
+      vscode.postMessage({ type: 'deleteSession', id: del });
+      return;
+    }
+    var row = e.target.closest ? e.target.closest('.sessRow') : null;
+    if (!row) return;
+    vscode.postMessage({ type: 'switchSession', id: row.getAttribute('data-sid') });
+    sessPanel.classList.remove('show');
+  });
+  function toggleSessPanel() { sessPanel.classList.toggle('show'); }
+
+  /* ---------- 内嵌页面（Agent 中心 / 多 AI 圆桌） ---------- */
+  var frameView = document.getElementById('frameView');
+  var frameFrame = document.getElementById('frameFrame');
+  var frameTitle = document.getElementById('frameTitle');
+  var frameUrl = '';
+  function openFrame(url, title) {
+    frameTitle.textContent = title || '';
+    frameUrl = url;
+    if (frameFrame.dataset.src !== url) {
+      frameFrame.src = url;
+      frameFrame.dataset.src = url;
+    }
+    frameView.classList.add('show');
+  }
+  document.getElementById('frameOpen').addEventListener('click', function () {
+    if (frameUrl) vscode.postMessage({ type: 'openExternal', url: frameUrl });
+  });
+  document.getElementById('frameClose').addEventListener('click', function () {
+    frameView.classList.remove('show');
+  });
+
+  /* ---------- Slash Commands (/xxx) + @ 文件引用 ---------- */
+  var SLASH_CMDS = [
+    { cmd: '/explain', desc: '解释选中的代码',  inject: '/explain ' },
+    { cmd: '/inline-edit', desc: '改这段代码',  inject: '/inline-edit ' },
+    { cmd: '/fix',     desc: '修复选中代码的 Bug', inject: '/fix ' },
+    { cmd: '/comment', desc: '加注释',     inject: '/comment ' },
+    { cmd: '/test',    desc: '生成测试',   inject: '/test ' },
+    { cmd: '/refactor',desc: '重构代码',   inject: '/refactor ' },
+    { cmd: '/refactor-global', desc: '跨文件全局重构', inject: '/refactor-global ' },
+    { cmd: '/git-review', desc: '审查 git 变更',  inject: '/git-review ' },
+    { cmd: '/generate',desc: '生成新代码', inject: '/generate ' },
+    { cmd: '/run',     desc: '运行命令',   inject: '/run ' }
+  ];
+  var pickerEl = document.getElementById('picker');
+  var pickerMode = null;    // 'slash' | 'at' | null
+  var pickerActiveIdx = 0;
+  var pickerItems = [];
+  var filesCache = [];      // @ 文件引用缓存
+  var filesCacheAt = 0;
+  var filesPending = false;
+
+  function pickerShow(items, mode) {
+    pickerMode = mode;
+    pickerItems = items;
+    pickerActiveIdx = 0;
+    pickerEl.innerHTML = items.map(function (it, i) {
+      if (mode === 'slash') {
+        return '<div class="pi' + (i === 0 ? ' active' : '') + '" data-i="' + i + '">' +
+          '<span class="pi-ic">' + esc(it.cmd) + '</span>' +
+          '<span class="pi-desc">' + esc(it.desc) + '</span></div>';
+      } else {
+        var parts = (it.path || '').split('/');
+        return '<div class="pi' + (i === 0 ? ' active' : '') + '" data-i="' + i + '">' +
+          '<span class="pi-ic" style="color:#8bc98f">📄</span>' +
+          '<span class="pi-nm">' + esc(parts[parts.length - 1] || it.path) + '</span>' +
+          '<span class="pi-path">' + esc(it.path || '') + '</span></div>';
+      }
+    }).join('');
+    pickerEl.style.display = items.length ? 'block' : 'none';
+  }
+  function pickerHide() { pickerEl.style.display = 'none'; pickerMode = null; }
+  function pickerSelect(idx) {
+    var it = pickerItems[idx];
+    if (!it) return;
+    var val = inputEl.value;
+    var before = val.substring(0, inputEl.selectionStart);
+    var after = val.substring(inputEl.selectionEnd);
+    var lastSlash = before.lastIndexOf('/');
+    var lastAt = before.lastIndexOf('@');
+    var start = Math.max(lastSlash, lastAt);
+    var prefix = before.substring(0, start);
+    var inserted;
+    if (pickerMode === 'slash') {
+      inserted = (it.inject || it.cmd + ' ');
+    } else {
+      inserted = '@' + (it.path || '') + ' ';
+      // 记住这个引用（发送时会转成实际内容）
+      if (!inputEl.__refs) inputEl.__refs = [];
+      inputEl.__refs.push({ path: it.path, atStart: prefix.length, atEnd: prefix.length + inserted.length });
+    }
+    inputEl.value = prefix + inserted + after;
+    inputEl.selectionStart = inputEl.selectionEnd = (prefix + inserted).length;
+    pickerHide();
+  }
+
+  function pickerFilterAndShow(q) {
+    if (!q || q === '/') { pickerShow(SLASH_CMDS, 'slash'); return; }
+    var kw = q.slice(1).toLowerCase();
+    var filtered = SLASH_CMDS.filter(function (c) {
+      return c.cmd.toLowerCase().indexOf(kw) >= 0 || c.desc.toLowerCase().indexOf(kw) >= 0;
+    });
+    pickerShow(filtered, 'slash');
+  }
+
+  function atPickerFilterAndShow(q) {
+    // 取 @ 后面的关键词
+    var kw = (q || '').toLowerCase();
+    var filtered = filesCache.filter(function (f) {
+      return (!kw) || (f.path || '').toLowerCase().indexOf(kw) >= 0;
+    });
+    pickerShow(filtered.slice(0, 30), 'at');
+  }
+
+  // 从扩展取工作区文件列表（有缓存）
+  function requestFiles() {
+    if (filesPending) return;
+    filesPending = true;
+    if (Date.now() - filesCacheAt < 60000 && filesCache.length) { filesPending = false; return; }
+    filesCacheAt = Date.now();
+    // 先拿当前打开的文件 + 最近会话里的 pending 文件（快速路径）
+    vscode.postMessage({ type: 'findFiles' });
+  }
+
+  inputEl.addEventListener('input', function () {
+    inputEl.style.height = 'auto';
+    inputEl.style.height = Math.min(140, Math.max(42, inputEl.scrollHeight)) + 'px';
+    // 检测 slash / @ picker 触发
+    var val = inputEl.value;
+    var caret = inputEl.selectionStart;
+    var before = val.substring(0, caret);
+    var m = before.match(/([@\/][^\s@\/]*)$/);
+    if (m) {
+      var prefix = m[0];
+      if (prefix.startsWith('/')) {
+        pickerFilterAndShow(prefix);
+      } else if (prefix.startsWith('@')) {
+        requestFiles();
+        atPickerFilterAndShow(prefix.slice(1));
+      }
+    } else if (pickerMode) {
+      pickerHide();
+    }
+  });
+  inputEl.addEventListener('keydown', function (e) {
+    if (pickerMode && pickerItems.length) {
+      if (e.key === 'ArrowDown') { e.preventDefault(); pickerActiveIdx = Math.min(pickerItems.length - 1, pickerActiveIdx + 1); pickerEl.querySelectorAll('.pi').forEach(function (el, i) { el.classList.toggle('active', i === pickerActiveIdx); }); }
+      else if (e.key === 'ArrowUp') { e.preventDefault(); pickerActiveIdx = Math.max(0, pickerActiveIdx - 1); pickerEl.querySelectorAll('.pi').forEach(function (el, i) { el.classList.toggle('active', i === pickerActiveIdx); }); }
+      else if (e.key === 'Enter') { e.preventDefault(); pickerSelect(pickerActiveIdx); return; }
+      else if (e.key === 'Escape') { e.preventDefault(); pickerHide(); return; }
+    }
+    if (e.key === 'Enter' && (e.ctrlKey || e.metaKey)) { e.preventDefault(); send(); }
+  });
+  pickerEl.addEventListener('click', function (e) {
+    var el = e.target.closest('.pi');
+    if (!el) return;
+    var i = Number(el.getAttribute('data-i'));
+    if (isNaN(i)) return;
+    pickerSelect(i);
+  });
+  document.addEventListener('click', function (e) {
+    if (pickerEl && !pickerEl.contains(e.target) && e.target !== inputEl) pickerHide();
+  });
+
+  /* ---------- P2-⑩ 粘贴图片 → OCR + AI 分析 ---------- */
+  inputEl.addEventListener('paste', async function (e) {
+    const items = (e.clipboardData && e.clipboardData.items) || [];
+    let imgFile = null;
+    for (let i = 0; i < items.length; i++) {
+      if (items[i].type.indexOf('image') === 0) { imgFile = items[i].getAsFile(); break; }
+    }
+    if (!imgFile) return;
+    e.preventDefault();
+    // 1) 把图片转 base64
+    const b64 = await new Promise(function (res) {
+      const r = new FileReader();
+      r.onload = () => res(r.result);
+      r.readAsDataURL(imgFile);
+    });
+    // 2) 在 chat 里先放个占位气泡，然后后台调 /v1/image_analyze
+    const tmpId = '_img_' + Date.now();
+    addUser('🖼️ [图片粘贴中…]', null);
+    try {
+      const r = await fetch(SERVER + '/v1/image_analyze', {
+        method: 'POST', headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ image: b64 })
+      });
+      const j = await r.json();
+      const analysis = (j && j.analysis) || '（图片分析失败）';
+      const ocr = (j && j.ocr) ? '\n\n📝 OCR 文字：\n```\n' + j.ocr + '\n```' : '';
+      // 把占位气泡换掉
+      const allUsrs = chatEl.querySelectorAll('.msg.user');
+      const last = allUsrs[allUsrs.length - 1];
+      const ub = last ? last.querySelector('.ububble') : null;
+      if (ub) ub.textContent = '🖼️ [粘贴的图片]';   // 只替换气泡，保留右侧头像
+      addAssistant(analysis + ocr, 0, []);
+    } catch (err) {
+      addAssistant('图片分析失败：' + (err && err.message ? err.message : String(err)), 0, []);
+    }
+  });
+
+  function send() {
+    var text = inputEl.value.trim();
+    if (!text || generating) return;
+    turnStart = Date.now();
+    var msg = {
+      type: 'send', text: text, mode: permSel.value,
+      agent: curAgent, len: 'medium'
+    };
+    if (curAgentPrompt) msg.agentPrompt = curAgentPrompt;
+    vscode.postMessage(msg);
+    inputEl.value = '';
+    inputEl.style.height = '42px';
+    proofread(text, chatEl.querySelectorAll('.msg.user').length + 1);   // 校对员 AI 异步复核（不阻塞发送）
+  }
+  sendBtn.addEventListener('click', send);
+  inputEl.addEventListener('keydown', function (e) {
+    if (e.key === 'Enter' && (e.ctrlKey || e.metaKey)) { e.preventDefault(); send(); }
+  });
+  inputEl.addEventListener('input', function () {
+    inputEl.style.height = 'auto';
+    inputEl.style.height = Math.min(140, Math.max(42, inputEl.scrollHeight)) + 'px';
+  });
+  document.getElementById('btnStop').addEventListener('click', function () {
+    vscode.postMessage({ type: 'stop' });
+  });
+
+  /* ---------- 端口视图内部控制 ---------- */
+  // 视图打开期间每 5 秒自动重新探测：服务重启/掉线后面板不再停留在旧状态
+  var _portTimer = null;
+  function startPortAutoRefresh() {
+    if (_portTimer) return;
+    _portTimer = setInterval(function () {
+      if (portView.classList.contains('show')) vscode.postMessage({ type: 'ports' });
+      else { clearInterval(_portTimer); _portTimer = null; }
+    }, 5000);
+  }
+  document.getElementById('portRefresh').addEventListener('click', function () {
+    portTb.innerHTML = '<tr><td colspan="4" style="color:#8b8f9a">探测中…</td></tr>';
+    vscode.postMessage({ type: 'ports' });
+  });
+  document.getElementById('portClose').addEventListener('click', function () {
+    portView.classList.remove('show');
+  });
+  portTb.addEventListener('click', function (e) {
+    var tr = e.target.closest('tr.row');
+    if (!tr) return;
+    vscode.postMessage({ type: 'openPort', port: Number(tr.getAttribute('data-port')) });
+  });
+  document.getElementById('btnAttach').addEventListener('click', function (e) {
+    e.stopPropagation();
+    openAttachMenu();
+  });
+  document.getElementById('btnAt').addEventListener('click', function () {
+    var v = inputEl.value;
+    inputEl.value = v + (v && !/\s$/.test(v) ? ' ' : '') + '@wasily ';
+    inputEl.focus();
+  });
+  // 语音输入：WebView 内可用时用 Web Speech，否则提示不支持
+  document.getElementById('btnMic').addEventListener('click', function () {
+    var SR = window.SpeechRecognition || window.webkitSpeechRecognition;
+    if (!SR) { toast('当前环境不支持语音输入'); return; }
+    var rec = new SR();
+    rec.lang = 'zh-CN';
+    rec.interimResults = true;
+    rec.onresult = function (e) {
+      var t = '';
+      for (var i = e.resultIndex; i < e.results.length; i++) t += e.results[i][0].transcript;
+      inputEl.value = (inputEl.value + ' ' + t).trim();
+      inputEl.dispatchEvent(new Event('input', { bubbles: true }));
+    };
+    rec.onerror = function () { toast('语音识别失败'); };
+    rec.onend = function () { document.getElementById('btnMic').classList.remove('on'); };
+    document.getElementById('btnMic').classList.add('on');
+    rec.start();
+  });
+  modeSel.addEventListener('change', function () {
+    vscode.postMessage({ type: 'setMode', value: modeSel.value });
+  });
+  document.addEventListener('click', function (e) {
+    if (!sessPanel.classList.contains('show')) return;
+    if (sessPanel.contains(e.target)) return;
+    sessPanel.classList.remove('show');
+  });
+
+  /* ---------- 来自扩展的消息 ---------- */
+  window.addEventListener('message', function (ev) {
+    var msg = ev.data;
+    if (!msg || !msg.type) return;
+    switch (msg.type) {
+      case 'filesList':
+        // @ 文件引用 picker 的工作区文件列表（来自扩展 findFiles）
+        filesCache = Array.isArray(msg.files) ? msg.files : [];
+        filesPending = false;
+        // 如果 picker 当前正开着 at 模式，刷新显示
+        if (pickerMode === 'at' && pickerItems && pickerItems.length) {
+          atPickerFilterAndShow(pickerItems._kw || '');
+        }
+        break;
+      case 'openFiles':
+        // 已改为 TRAE 式状态栏，不再显示「当前：文件」芯片组
+        break;
+      case 'renderMessages':
+        renderAll(msg.sid, msg.messages);
+        break;
+      case 'append':
+        if (msg.sid && currentSid && msg.sid !== currentSid) break;
+        streamEnd();   // 流式气泡由最终完整消息接管
+        if (msg.role === 'user') addUser(msg.content, msg.ref);
+        else {
+          addAssistant(msg.content, turnStart ? Date.now() - turnStart : 0, msg.steps);
+          turnStart = 0;
+        }
+        break;
+      case 'delta':
+        if (msg.sid && currentSid && msg.sid !== currentSid) break;
+        streamPush(msg.text || '');
+        break;
+      case 'streamReset':
+        if (msg.sid && currentSid && msg.sid !== currentSid) break;
+        streamReset();
+        break;
+      case 'plan':
+        if (msg.sid && currentSid && msg.sid !== currentSid) break;
+        addOrchCard(msg.plan);
+        break;
+      case 'sessions':
+        renderSessList(msg.sessions, msg.activeId);
+        break;
+      case 'toggleHistory':
+        toggleSessPanel();
+        break;
+      case 'mode':
+        applyMode(msg.value);
+        break;
+      case 'phase':
+        applyPhase(msg.phase, msg.tool);
+        break;
+      case 'generating':
+        setGenerating(!!msg.value);
+        if (msg.value) { addThinking(); startToolEvPoll(); }
+        else { streamEnd(); stopToolEvPoll(); }   // 停止/失败/完成：清掉未收尾的流式气泡
+        break;
+      case 'status':
+        // 在线状态统一由 IDE 底部状态栏展示，面板内不再重复提示
+        break;
+      case 'pendingContext':
+        renderPending(msg.value);
+        break;
+      case 'changes':
+        addChanges(msg.files);
+        break;
+      case 'ports':
+        renderPorts(msg.rows || []);
+        break;
+      case 'selfchecking':
+        if (msg.value) toast('正在自检上一条回答…');
+        break;
+      case 'notify':
+        toast(msg.message || '');
+        break;
+      case 'apiResp':
+        var pcb = apiPending[msg.reqId];
+        if (pcb) { delete apiPending[msg.reqId]; pcb({ ok: !!msg.ok, data: msg.data }); }
+        break;
+      case 'openFrame':
+        openFrame(msg.url, msg.title || '');
+        break;
+      case 'showPorts':
+        document.getElementById('portView').classList.add('show');
+        vscode.postMessage({ type: 'ports' });
+        startPortAutoRefresh();
+        break;
+      case 'togglePorts':
+        var pv = document.getElementById('portView');
+        if (pv.classList.contains('show')) { pv.classList.remove('show'); }
+        else {
+          pv.classList.add('show');
+          portTb.innerHTML = '<tr><td colspan="4" style="color:#8b8f9a">探测中…</td></tr>';
+          vscode.postMessage({ type: 'ports' });
+          startPortAutoRefresh();
+        }
+        break;
+      case 'closeFrame':
+        frameView.classList.remove('show');
+        break;
+      case 'debugHint': {
+        // P3-④ 断点命中提示卡片：stack + AI 分析（复用 renderMarkdown 渲染代码块）
+        var card = document.createElement('div');
+        card.className = 'debug-hint';
+        var html = '<div style="background:#1e2230;border:1px solid #3a3f4f;border-radius:8px;padding:12px;margin:10px 0;">';
+        html += '<div style="color:#ff9f7a;font-weight:600;font-size:13px;margin-bottom:6px;">🛑 断点命中 wasily AI 分析</div>';
+        if (msg.filePath) html += '<div style="color:#8b8f9a;font-size:11px;margin-bottom:6px;">file: ' + esc(msg.filePath) + '</div>';
+        if (msg.frames) html += '<pre style="color:#a7b0c2;background:#0f1118;padding:8px;border-radius:4px;font-size:11.5px;white-space:pre-wrap;margin:0 0 8px 0;">' + esc(msg.frames) + '</pre>';
+        if (msg.content) {
+          html += '<div style="border-top:1px solid #2a2e3e;padding-top:8px;margin-top:8px;">';
+          html += '<div style="color:#8fbaff;font-size:12px;font-weight:600;margin-bottom:4px;">AI 建议</div>';
+          html += '<div style="font-size:12px;line-height:1.55;">' + renderMarkdown(msg.content) + '</div>';
+          html += '</div>';
+        }
+        html += '</div>';
+        card.innerHTML = html;
+        chatEl.appendChild(card);
+        chatEl.scrollTop = chatEl.scrollHeight;
+        break;
+      }
+    }
+  });
+
+  /* ==================== 输入栏弹层（权限 / 智能体 / 模型 / + 菜单） ==================== */
+  var popEl = document.getElementById('pop');
+  var popSubEl = document.getElementById('popSub');
+  var permPill = document.getElementById('permPill');
+  var agentPill = document.getElementById('agentPill');
+  var modelPill = document.getElementById('modelPill');
+  var permLabel = document.getElementById('permLabel');
+  var agentLabel = document.getElementById('agentLabel');
+  var modelLabel = document.getElementById('modelLabel');
+  var btnAttach = document.getElementById('btnAttach');
+
+  var curAgent = 'agent';        // 'chat' | 'agent' | 自定义智能体标识
+  var curAgentPrompt = '';
+  var curPerm = 'full';          // manual | auto | full | custom
+  var curModel = 'Auto';
+  var cfgAgents = [];            // agents.custom
+  var cfgModels = [];            // models.custom
+
+  /* ---- 接口代理（WebView CSP 禁 fetch，经扩展中转） ---- */
+  var apiSeq = 0, apiPending = {};
+  function api(path, method, body, timeoutMs) {
+    return new Promise(function (resolve) {
+      var id = 'a' + (++apiSeq);
+      apiPending[id] = resolve;
+      vscode.postMessage({ type: 'api', reqId: id, path: path, method: method || 'GET', body: body });
+      setTimeout(function () {
+        if (apiPending[id]) { delete apiPending[id]; resolve({ ok: false, data: null }); }
+      }, timeoutMs || 8000);
+    });
+  }
+
+  /* ---- 弹层定位与关闭 ---- */
+  var popAnchor = null;
+  function hideSub() { popSubEl.style.display = 'none'; }
+  function hidePop() { popEl.style.display = 'none'; hideSub(); popAnchor = null; }
+  function showPop(anchor, html) {
+    if (popAnchor === anchor && popEl.style.display === 'block') { hidePop(); return; }
+    popEl.innerHTML = html;
+    popEl.style.display = 'block';
+    popEl.style.visibility = 'hidden';
+    var r = anchor.getBoundingClientRect();
+    var w = popEl.offsetWidth, h = popEl.offsetHeight;
+    var left = Math.max(4, Math.min(r.left, window.innerWidth - w - 6));
+    var bottom = window.innerHeight - r.top + 6;
+    if (bottom + h > window.innerHeight - 4) bottom = window.innerHeight - h - 4;
+    popEl.style.left = left + 'px';
+    popEl.style.top = 'auto';
+    popEl.style.bottom = bottom + 'px';
+    popEl.style.visibility = 'visible';
+    popAnchor = anchor;
+    hideSub();
+  }
+  function showSub(itemEl, html) {
+    popSubEl.innerHTML = html;
+    popSubEl.style.display = 'block';
+    popSubEl.style.visibility = 'hidden';
+    var r = itemEl.getBoundingClientRect();
+    var w = popSubEl.offsetWidth, h = popSubEl.offsetHeight;
+    var left = r.right + 4;
+    if (left + w > window.innerWidth - 4) left = r.left - w - 4;
+    var top = Math.min(r.top, window.innerHeight - h - 6);
+    popSubEl.style.left = Math.max(4, left) + 'px';
+    popSubEl.style.top = Math.max(4, top) + 'px';
+    popSubEl.style.bottom = 'auto';
+    popSubEl.style.visibility = 'visible';
+  }
+  document.addEventListener('click', function (e) {
+    if (popEl.style.display !== 'block') return;
+    if (popEl.contains(e.target) || popSubEl.contains(e.target)) return;
+    if (popAnchor && popAnchor.contains(e.target)) return;
+    hidePop();
+  });
+  document.addEventListener('keydown', function (e) { if (e.key === 'Escape') hidePop(); });
+
+  /* ---- 图标与条目模板 ---- */
+  function svg(p) { return '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round">' + p + '</svg>'; }
+  var IC = {
+    at: '<circle cx="12" cy="12" r="3.4"/><path d="M15.4 12v1.6a2.6 2.6 0 0 0 5.2 0V12a8.6 8.6 0 1 0-3.4 6.8"/>',
+    slash: '<path d="M14.5 4l-5 16"/>',
+    upload: '<path d="M12 16V5M6.8 10.2 12 5l5.2 5.2"/><path d="M4.5 19.5h15"/>',
+    cmd: '<path d="M5 7l5 5-5 5M12 17h7"/>',
+    plug: '<path d="M9 7V4M15 7V4M7 7h10v4a5 5 0 0 1-10 0z"/><path d="M12 16v4"/>',
+    skill: '<path d="M12 3l2.2 5.6L20 9.3l-4.2 3.9 1.2 5.8L12 16l-5 3 1.2-5.8L4 9.3l5.8-.7z"/>',
+    doc: '<path d="M14 3.5H7.2A1.7 1.7 0 0 0 5.5 5.2v13.6a1.7 1.7 0 0 0 1.7 1.7h9.6a1.7 1.7 0 0 0 1.7-1.7V8z"/><path d="M14 3.5V8h5.5M9 13h6M9 16.4h6"/>',
+    book: '<circle cx="9" cy="8.5" r="3"/><path d="M3.8 19.2c.6-3 2.6-4.7 5.2-4.7s4.6 1.7 5.2 4.7"/><path d="M16 6.2a2.9 2.9 0 0 1 0 5.6M17.4 14.8c2 .4 3.3 2 3.7 4.4"/>',
+    arr: '<path d="M9 6l6 6-6 6"/>',
+    check: '<path d="M5 12.5l4.2 4.2L19 7"/>',
+    chat: '<path d="M4 6h16v10H8l-4 4zM8 10h8M8 13h5"/>',
+    bot: '<rect x="5" y="8" width="14" height="10" rx="2.5"/><path d="M12 8V4.5M8.5 4.5h7"/><circle cx="9.3" cy="12.5" r=".9" fill="currentColor"/><circle cx="14.7" cy="12.5" r=".9" fill="currentColor"/>',
+    spark: '<path d="M12 4l1.8 4.6L18.5 10l-4.7 1.4L12 16l-1.8-4.6L5.5 10l4.7-1.4z"/><path d="M18.2 14.5l.8 2 2 .8-2 .8-.8 2-.8-2-2-.8 2-.8z"/>',
+    lock: '<rect x="5.5" y="10.5" width="13" height="9" rx="2"/><path d="M8.5 10.5V8a3.5 3.5 0 0 1 7 0v2.5"/>',
+    zap: '<path d="M13 3L5 13.5h5L10.5 21 19 9.5h-5.5z"/>',
+    shield: '<path d="M12 3l8 3v6c0 4.5-3.2 7.7-8 9-4.8-1.3-8-4.5-8-9V6zM9 12l2 2 4-4"/>',
+    tune: '<path d="M5 8h9M18 8h1M5 16h3M12 16h7"/><circle cx="16" cy="8" r="2"/><circle cx="10" cy="16" r="2"/>'
+  };
+  function popIt(icon, text, attrs) {
+    return '<div class="popIt" ' + (attrs || '') + '>' + svg(icon) + '<span>' + esc(text) + '</span></div>';
+  }
+  function subIt(icon, text, key) {
+    return '<div class="popIt" data-sub="' + key + '">' + svg(icon) + '<span>' + esc(text) + '</span>' +
+      svg(IC.arr).replace('<svg', '<svg class="arr"') + '</div>';
+  }
+
+  /* ---- 权限审批 ---- */
+  var PERM_OPTS = [
+    { k: 'manual', t: '手动审批', d: '所有 Agent 操作都需要你手动批准', i: IC.lock },
+    { k: 'auto', t: '自动审批', d: '自动批准低风险操作，敏感操作需确认', i: IC.zap },
+    { k: 'full', t: '完全访问', d: '自动批准所有 Agent 操作', i: IC.shield },
+    { k: 'custom', t: '自定义', d: '按操作类型自定义审批规则', i: IC.tune }
+  ];
+  function applyPerm(k, save) {
+    var opt = null;
+    for (var i = 0; i < PERM_OPTS.length; i++) if (PERM_OPTS[i].k === k) opt = PERM_OPTS[i];
+    if (!opt) opt = PERM_OPTS[2];
+    curPerm = opt.k;
+    permLabel.textContent = opt.t;
+    permPill.classList.toggle('full', opt.k === 'full');
+    permSel.value = (opt.k === 'full') ? 'full' : 'confirm';
+    if (save) api('/config/set', 'POST', { path: 'permission.mode', value: opt.k });
+  }
+  function openPermMenu() {
+    var html = '<div class="popHead">如何批准 Agent 的操作？<span class="lnk" data-a="permMore">了解更多</span></div>';
+    PERM_OPTS.forEach(function (o) {
+      html += '<div class="popOpt' + (o.k === curPerm ? ' on' : '') + '" data-perm="' + o.k + '">' +
+        '<span class="oi">' + svg(o.i) + '</span>' +
+        '<span><div class="ot">' + o.t + '</div><div class="od">' + o.d + '</div></span>' +
+        '<span class="ock">' + svg(IC.check) + '</span></div>';
+    });
+    showPop(permPill, html);
+  }
+
+  /* ---- 智能体选择 ---- */
+  function pickAgent(k, custom) {
+    if (custom) {
+      curAgent = custom.slug || custom.name;
+      curAgentPrompt = custom.prompt || '';
+      agentLabel.textContent = custom.name;
+      applyMode('solo');
+      vscode.postMessage({ type: 'setMode', value: 'solo' });
+    } else if (k === 'chat') {
+      curAgent = 'chat';
+      curAgentPrompt = '';
+      agentLabel.textContent = 'Chat';
+      applyMode('ide');
+      vscode.postMessage({ type: 'setMode', value: 'ide' });
+    } else {
+      curAgent = 'agent';
+      curAgentPrompt = '';
+      agentLabel.textContent = 'Agent';
+      applyMode('solo');
+      vscode.postMessage({ type: 'setMode', value: 'solo' });
+    }
+  }
+  function openAgentMenu() {
+    var html = '<div class="popHead">内置智能体</div>';
+    html += '<div class="popOpt' + (curAgent === 'chat' ? ' on' : '') + '" data-ag="chat">' +
+      '<span class="oi">' + svg(IC.chat) + '</span>' +
+      '<span><div class="ot">Chat</div><div class="od">对话问答，不调用工具</div></span>' +
+      '<span class="ock">' + svg(IC.check) + '</span></div>';
+    html += '<div class="popOpt' + (curAgent === 'agent' ? ' on' : '') + '" data-ag="agent">' +
+      '<span class="oi">' + svg(IC.bot) + '</span>' +
+      '<span><div class="ot">Agent</div><div class="od">自主规划并执行开发任务</div></span>' +
+      '<span class="ock">' + svg(IC.check) + '</span></div>';
+    if (cfgAgents.length) {
+      html += '<div class="popSep"></div><div class="popHead">自定义智能体</div>';
+      cfgAgents.forEach(function (a, idx) {
+        html += '<div class="popOpt' + (curAgent === (a.slug || a.name) ? ' on' : '') + '" data-agc="' + idx + '">' +
+          '<span class="oi">' + svg(IC.bot) + '</span>' +
+          '<span><div class="ot">' + esc(a.name) + '</div>' +
+          (a.when ? '<div class="od">' + esc(a.when) + '</div>' : '') + '</span>' +
+          '<span class="ock">' + svg(IC.check) + '</span></div>';
+      });
+    }
+    html += '<div class="popFoot" data-a="createAgent">＋ 创建智能体</div>';
+    showPop(agentPill, html);
+  }
+
+  /* ---- 模型选择 ---- */
+  var BRAND = { Local: ['#2f7d4f', 'L'], Remote: ['#4d8dff', 'R'], Seed: ['#1f2329', 'S'], GLM: ['#3d5af1', 'Z'], DeepSeek: ['#4d8dff', 'D'] };
+  var MODELS = [
+    { n: '本地 Qwen2.5-7B', b: 'Local', tag: '自我进化', m: '本机' },
+    { n: '本地 Qwen2.5-14B', b: 'Local', tag: '自我进化', m: '本机' },
+    { n: '远程 OpenAI (gpt-4o-mini)', b: 'Remote', m: '云端' },
+    { n: '远程 DeepSeek', b: 'Remote', m: '云端' }
+  ];
+  function pickModel(n, save) {
+    curModel = n;
+    modelLabel.textContent = (n === 'Auto') ? 'Auto' : n;
+    if (save) api('/config/set', 'POST', { path: 'ui.chat_model', value: n });
+  }
+  function modelRow(name, brand, tag, mult) {
+    var on = (curModel === name);
+    var icoHtml;
+    if (brand === 'Auto') {
+      icoHtml = '<span class="mico" style="background:#2f7d4f">' + svg(IC.spark) + '</span>';
+    } else {
+      var c = BRAND[brand] || ['#555', 'C'];
+      icoHtml = '<span class="mico" style="background:' + c[0] + '">' + c[1] + '</span>';
+    }
+    return '<div class="popM' + (on ? ' on' : '') + '" data-m="' + esc(name) + '">' +
+      icoHtml + '<span>' + esc(name) + '</span>' +
+      (tag ? '<span class="mtag">' + esc(tag) + '</span>' : '') +
+      (on ? '<span class="ock">' + svg(IC.check) + '</span>' : '<span class="mult">' + esc(mult || '') + '</span>') +
+      '</div>';
+  }
+  function openModelMenu() {
+    var html = '<div class="popHead">可用模型</div>';
+    html += modelRow('Auto', 'Auto', '', '');
+    MODELS.forEach(function (m) { html += modelRow(m.n, m.b, m.tag, m.m); });
+    if (cfgModels.length) {
+      html += '<div class="popSep"></div><div class="popHead">自定义模型</div>';
+      cfgModels.forEach(function (m) { html += modelRow(m.name || m.n, '', '', ''); });
+    }
+    html += '<div class="popFoot" data-a="addModel">＋ 添加模型</div>';
+    showPop(modelPill, html);
+  }
+
+  /* ---- “+” 菜单与子菜单 ---- */
+  var QUICK_ITEMS = [
+    ['explain', '解释代码'], ['addComments', '添加注释'],
+    ['fixBug', '修复 Bug'], ['genTests', '生成测试']
+  ];
+  function openAttachMenu() {
+    var html =
+      popIt(IC.at, '使用 @ 引用上下文', 'data-a="at"') +
+      popIt(IC.slash, '使用 / 调用命令和技能', 'data-a="slash"') +
+      popIt(IC.upload, '上传附件', 'data-a="upload"') +
+      '<div class="popSep"></div>' +
+      subIt(IC.cmd, '命令', 'cmd') +
+      subIt(IC.plug, '插件', 'plugin') +
+      subIt(IC.skill, '技能', 'skill') +
+      subIt(IC.doc, '飞书文档', 'fsdoc') +
+      subIt(IC.book, '飞书通讯录', 'fscontact');
+    showPop(btnAttach, html);
+  }
+  function insertAtCursor(text) {
+    var s = inputEl.selectionStart || 0, e2 = inputEl.selectionEnd || 0;
+    var v = inputEl.value;
+    inputEl.value = v.slice(0, s) + text + v.slice(e2);
+    var p = s + text.length;
+    inputEl.setSelectionRange(p, p);
+    inputEl.focus();
+    inputEl.dispatchEvent(new Event('input', { bubbles: true }));
+  }
+  function openSub(key, itemEl) {
+    if (key === 'cmd') {
+      var html = '';
+      QUICK_ITEMS.forEach(function (q) {
+        html += '<div class="popIt" data-q="' + q[0] + '">' + svg(IC.cmd) + '<span>' + q[1] + '</span></div>';
+      });
+      showSub(itemEl, html);
+    } else if (key === 'plugin') {
+      showSub(itemEl, '<div class="popHead">加载中…</div>');
+      api('/plugins/catalog').then(function (r) {
+        var tools = (r.ok && r.data && r.data.user_tools) || [];
+        tools = tools.filter(function (t) { return t.enabled; });
+        var html = tools.length ? '' : '<div class="popHead">暂无已安装插件</div>';
+        tools.forEach(function (t) {
+          var nm = t.tool || String(t.file || '').replace(/\.py$/, '');
+          html += '<div class="popIt" data-ins="/' + esc(nm) + ' ">' + svg(IC.plug) + '<span>' + esc(nm) + '</span></div>';
+        });
+        if (popSubEl.style.display === 'block') showSub(itemEl, html);
+      });
+    } else if (key === 'skill') {
+      showSub(itemEl, '<div class="popHead">加载中…</div>');
+      api('/agent/skills').then(function (r) {
+        var sk = (r.ok && r.data && r.data.skills) || [];
+        var html = sk.length ? '' : '<div class="popHead">暂无可用技能</div>';
+        sk.forEach(function (s) {
+          var trig = (s.triggers && s.triggers[0]) || s.name;
+          html += '<div class="popIt" data-ins="' + esc(trig) + ' ">' + svg(IC.skill) +
+            '<span>' + esc(s.name) + '</span><span class="sub">' + esc(trig) + '</span></div>';
+        });
+        if (popSubEl.style.display === 'block') showSub(itemEl, html);
+      });
+    } else {
+      showSub(itemEl, '<div class="popHead">未连接飞书</div>' +
+        '<div class="popIt" style="cursor:default;color:#63656d"><span>请在设置中心完成飞书授权</span></div>');
+    }
+  }
+
+  /* ---- 弹层点击委托 ---- */
+  popEl.addEventListener('click', function (e) {
+    var el = e.target.closest ? e.target.closest('.popIt,.popOpt,.popM,.popFoot,.lnk') : null;
+    if (!el || !popEl.contains(el)) return;
+    var sub = el.getAttribute('data-sub');
+    if (sub) { openSub(sub, el); return; }
+    var a = el.getAttribute('data-a');
+    if (a === 'at') { hidePop(); insertAtCursor('@wasily '); return; }
+    if (a === 'slash') { hidePop(); insertAtCursor('/'); return; }
+    if (a === 'upload') { hidePop(); vscode.postMessage({ type: 'attachFile' }); return; }
+    if (a === 'permMore') { hidePop(); vscode.postMessage({ type: 'openSettings', tab: 'perm' }); return; }
+    if (a === 'createAgent') { hidePop(); vscode.postMessage({ type: 'openSettings', tab: 'agent' }); return; }
+    if (a === 'addModel') { hidePop(); vscode.postMessage({ type: 'openSettings', tab: 'model' }); return; }
+    var pm = el.getAttribute('data-perm');
+    if (pm) { applyPerm(pm, true); hidePop(); return; }
+    var ag = el.getAttribute('data-ag');
+    if (ag) { pickAgent(ag); hidePop(); return; }
+    var agc = el.getAttribute('data-agc');
+    if (agc !== null && agc !== undefined && agc !== '') { pickAgent(null, cfgAgents[Number(agc)]); hidePop(); return; }
+    var mm = el.getAttribute('data-m');
+    if (mm) { pickModel(mm, true); hidePop(); return; }
+  });
+  popSubEl.addEventListener('click', function (e) {
+    var el = e.target.closest ? e.target.closest('.popIt') : null;
+    if (!el || !popSubEl.contains(el)) return;
+    var q = el.getAttribute('data-q');
+    if (q) { hidePop(); vscode.postMessage({ type: 'quick', kind: q }); return; }
+    var ins = el.getAttribute('data-ins');
+    if (ins) { hidePop(); insertAtCursor(ins); return; }
+  });
+
+  permPill.addEventListener('click', function (e) { e.stopPropagation(); openPermMenu(); });
+  agentPill.addEventListener('click', function (e) { e.stopPropagation(); openAgentMenu(); });
+  modelPill.addEventListener('click', function (e) { e.stopPropagation(); openModelMenu(); });
+
+  /* ---- 初始化：读取配置应用 权限/模型/自定义智能体 ---- */
+  api('/config/get').then(function (r) {
+    var cfg = (r.ok && r.data) || {};
+    try {
+      applyPerm((cfg.permission && cfg.permission.mode) || 'full', false);
+      if (cfg.ui && cfg.ui.chat_model) pickModel(cfg.ui.chat_model, false);
+      if (cfg.agents && Array.isArray(cfg.agents.custom)) cfgAgents = cfg.agents.custom;
+      if (cfg.models && Array.isArray(cfg.models.custom)) cfgModels = cfg.models.custom;
+    } catch (e) { /* 配置异常时保持默认 */ }
+  });
+
+  vscode.postMessage({ type: 'ready' });
+})();
+</script>
+</body>
+</html>

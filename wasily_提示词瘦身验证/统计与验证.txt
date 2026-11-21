@@ -1,0 +1,159 @@
+wasily 系统提示词瘦身 —— 统计与验证
+生成时间：2026-11-08  数据集/脚本：C:\Users\Administrator\AppData\Local\Temp\wasily_prompt_audit.py（真实分词器）
+统计口径：llama_cpp.Llama(model_path=<7B GGUF>, vocab_only=True) 的 tok.tokenize()，不加载权重，不是字符/4 估算。
+
+============================================================
+一、怎么统计的（可复现）
+============================================================
+1) 分词器：Qwen2.5-7B-Instruct GGUF（与线上同一文件），vocab_only 模式，约 0.9s 加载。
+2) 逐段取真实字符串：BASE_PROMPT、get_tools_prompt()、orchestrator.section()、
+   _READ_ROUTING_SECTION、_DEV_AGENT_SECTION、_ASK_MODE_SECTION、_PLAN_MODE_SECTION、
+   skills.skills_prompt()、memory_net.recall_section()、_recent_history_digest()、
+   项目规则、route_hint、动作型/自我进化硬约束。
+3) 再调用 build_system_prompt(query, mode) 取「实际拼装结果」实测值，与分段合计对照。
+   分段合计是「若全部拼装」的原始体积；实际体积因按需裁剪而更小。
+4) 两套样本：
+   - 复杂 Agent：在 wasily 项目里新增折叠对话面板，修改 api_server.py 和 ide_panel.html，并验证重启恢复
+   - 简单闲聊：你好，介绍一下你自己
+
+============================================================
+二、改后逐段真实体积（前十大项）
+============================================================
+【复杂 Agent 请求】simple=False
+序号  段落                                   字符      tokens
+ 1    工具清单 get_tools_prompt              1852       735
+ 2    编排说明 orchestrator.section           1559       730
+ 3    角色设定 BASE_PROMPT                    770       439
+ 4    记忆召回 memory_net.recall_section       605       355
+ 5    技能清单 skills_prompt                  561       278
+ 6    读文件规范 _READ_ROUTING_SECTION        532       254
+ 7    近期历史摘要 _recent_history_digest      393       246
+ 8    项目规则 .traerules                     433       235
+ 9    工程开发智能体 _DEV_AGENT_SECTION        331       201
+ 10   动作型任务硬约束                        359       191
+       Plan 模式段                           197       133
+       运行环境说明                          140        84
+       Ask 模式段                            153        84
+       四支柱 route_hint                       62        38
+       分段合计                                     4003
+       build_system_prompt 实测（6864 字符）          3408
+       真实请求 system（含技能+IDE 上下文）            3685
+
+【简单闲聊】simple=True
+序号  段落                                   字符      tokens
+ 1    工具清单 get_tools_prompt              1295       542
+ 2    记忆召回 memory_net.recall_section       804       453   （原文，实际注入被限长 420 字符）
+ 3    角色设定 BASE_PROMPT                    770       439
+ 4    读文件规范 _READ_ROUTING_SECTION        532       254   （按需，简单闲聊实际不拼装）
+ 5    项目规则 .traerules                     433       235
+ 6    近期历史摘要 _recent_history_digest      287       182   （按需，简单闲聊实际不拼装）
+ 7    编排说明 orchestrator.section           130        78   （simple 版）
+ 8    运行环境说明                          140        84
+ 9    Ask 模式段（mode=ask 时）               153        84
+ 10   四支柱 route_hint                       76        44
+       分段合计                                     2528
+       build_system_prompt 实测（3162 字符）          1598
+       真实请求 system（含技能+IDE 上下文）            1598
+
+注：简单闲聊的分段合计 2528 大于实测 1598，差额正是「按需段未拼装」——
+    读文件规范、历史摘要、复杂编排、工程开发智能体都未注入。
+
+============================================================
+三、按语义归类（对应要求的六类）
+============================================================
+- 角色设定（身份/运行方式/工具调用格式/数据定位/执行链路/执行风格）：439 tokens（全部在 BASE_PROMPT）
+- 模式说明：Ask 84 / Plan 133 / Agent 0（仅按模式追加一段）
+- 工具使用规范：工具清单 735(复杂)/542(简单) + 读文件规范 254(按需) + 工程开发智能体 201(非简单) + 动作型硬约束 191(动作意图)
+- 输出格式：tool_call 格式已并入 BASE_PROMPT（不再单独成段）；tasks/plan 格式在编排段 Plan 段
+- 记忆：召回 355(复杂)/453(简单原文) 实际限长 720/420 字符；近期历史摘要 246/182（按需）
+- 技能清单：278（命中才注入）
+- 其他：项目规则 235、运行环境 84、route_hint 38/44、MCP HUB 工具
+
+============================================================
+四、常驻 vs 按需（分层规则）
+============================================================
+常驻（每轮都拼）：
+  BASE_PROMPT(439) + 工具清单(542) + 运行环境(84) + 项目规则(235) + 编排 simple 版(78)
+  + route_hint(44) + 已学习记忆(如有)
+按需（满足条件才拼）：
+  - mode=ask/plan 或 意图含读/文件/pdf/网页 → 读文件规范(254) + readers 工具组(read_pdf/read_office/read_image/fetch_web)
+  - 意图含 改自/源码/self_/进化/加功能/修bug → MCP self 段 + 用户工具安装指引
+  - 非简单请求 → 工程开发智能体段(201) + orchestrator 复杂编排(730)
+  - 命中技能触发词 → 技能清单
+  - mode=ask / mode=plan → 对应模式段
+  - 意图含 上次/之前/继续/记得 或 非简单 → 近期历史摘要
+  - query 非空 → 记忆召回（top=3，复杂限 720 字符、简单限 420 字符）
+
+============================================================
+五、压缩手法（逐条可核查）
+============================================================
+1) 去掉重复表述：BASE_PROMPT 重写，删除与工具清单重复的「调用格式」块；
+   get_tools_prompt 不再重复输出 tool_call 语法。
+2) 长示例改短示例：orchestrator 复杂编排只留最小 JSON 示例；技能库只列「名称 + 前 3 个触发词」。
+3) 规则短句化：读文件规范由长句压成分号条目；BASE_PROMPT 执行链路/执行风格压成 2-3 条。
+4) 长说明移进工具 description：read_image / read_pdf / read_office / fetch_web /
+   sequential_thinking / task_done / memory_save / file_read / code_read 的 description 精简，
+   系统提示里只留「按类型选工具」的规则。
+5) 记忆限长：memory_net 召回 top 5→3，且按简单/复杂分别截断 420/720 字符。
+6) 历史摘要截短：单条 user 32 字、assistant 50 字，最多 3 条，标题加「历史不代表本轮已执行」。
+7) 保留约束：只读拦截（READONLY_REJECT_MSG）、Ask/Plan 行为约束、动作型硬约束、
+   tool_call 输出格式、数据非指令规则全部保留，未为瘦身删掉任何一条。
+
+============================================================
+六、改前 / 改后数字
+============================================================
+系统提示 token（真实分词器）：
+  简单闲聊  build 3611 → 1598   (-55.7%，占原来 44.2%)
+  简单 ask  3695 → 1804        (-51.2%)
+  复杂请求  build 5693 → 3408  (-40.1%)；含技能+IDE 的最终 system 3685
+
+主要段落：
+  BASE_PROMPT                1079 → 439
+  工具清单                   924 → 735(复杂) / 542(简单)
+  复杂编排                   1329 → 730
+  读文件规范                 常驻 → 仅相关意图
+  MCP self 段 / 工具安装指引  常驻 → 仅自改意图
+  近期历史摘要               简单闲聊不注入
+  记忆召回                   top 5 无限制 → top 3，限长 420/720
+
+首字延迟 / 总耗时（同一进程、同一 3B GGUF、GPU、唯一随机前缀避免 KV 缓存复用，8 tokens 输出）：
+  改后  prompt 1847 tokens   首字 15.82s   总耗时 17.17s
+  改前  prompt 3719 tokens   首字 26.48s   总耗时 28.81s
+  → 首字 -40.3%，总耗时 -40.4%
+  说明：测量时机器上另一会话正在跑 GPU/MCP 测试，绝对数值偏慢；
+  该对比是同一进程内连续交替测得，只用于比较「同为冷 prefill 时」的相对差。
+
+真实 HTTP 请求（新提示词已上线到服务链路）：
+  - 隔离实例（7B，新代码）：预热 + 6 次请求全部正常返回，无异常、无截断。
+  - 共享服务：prompt 1946（服务粗估）→ 首字 6.11s、总耗时 6.67s，回答正常。
+  - 同期另一次：prompt 1955 → 首字 28.41s、总 30.73s（该时段另一会话重载，抖动大）。
+
+============================================================
+七、功能回归（全部 PASS）
+============================================================
+PASS  Ask 模式含 Ask 段、不含 Plan 段
+PASS  Plan 模式含 Plan 段、不含 Ask 段
+PASS  Agent 模式不带任何模式段
+PASS  闲聊不列 read_pdf / fetch_web
+PASS  PDF 请求自动挂载 read_pdf
+PASS  PDF 请求带读文件规范
+PASS  闲聊不带读文件规范
+PASS  复杂请求带任务编排
+PASS  简单闲聊不带任务编排
+PASS  skill 清单命中 1 个技能，注入 701 字符
+PASS  折叠触发（manual）
+PASS  折叠摘要渲染进 system 头部（头部首段即 [[WASILY_FOLD_SUMMARY_BEGIN]]）
+PASS  模型侧原文已被移出（25 条消息 → 5 条）
+
+============================================================
+八、改动文件
+============================================================
+  wasily/AI/api_server.py    BASE_PROMPT 重写、build_system_prompt 分层拼装、
+                             _USER_TOOL_INSTALL_SECTION 抽出、记忆召回限长、
+                             _recent_history_digest 截短
+  wasily/AI/tools.py         get_tools_prompt 去重复、CORE_TOOLS 移除 readers、
+                             TOOL_GROUPS/GROUP_KEYWORDS 增 readers 组、get_user_tools_prompt 去重
+  wasily/AI/orchestrator.py  复杂编排段压缩（1329→730）
+  wasily/AI/user_tools/*     仅压缩 description（read_pdf/read_office/read_image/fetch_web/
+                             ide_edit/ide_terminal/mem_recall）
+  （GPU、MCP 相关代码段未改动）

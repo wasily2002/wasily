@@ -1,0 +1,28 @@
+<html>
+<head><title>待办事项清单</title></head>
+<body>
+<h1>待办事项清单</h1>
+<ul id='todoList'>
+</ul>
+<script>
+function addTodo() {
+    let task = document.getElementById('newTask').value;
+    if (task) {
+        let li = document.createElement('li');
+        li.appendChild(document.createTextNode(task));
+        li.addEventListener('click', function () {
+            li.style.textDecoration = 'line-through';
+        });
+        li.addEventListener('dblclick', function () {
+            li.remove();
+        });
+        document.getElementById('todoList').appendChild(li);
+        document.getElementById('newTask').value = '';
+    }
+}
+</script>
+<form>
+    <input type='text' id='newTask' placeholder='输入待办事项...' /> <button type='button' onclick='addTodo()'>添加</button>
+</form>
+</body>
+</html>

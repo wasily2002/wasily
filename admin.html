@@ -1,0 +1,345 @@
+<!--
+ * @Author: Qoder
+ * @Date: 2026-10-06 13:30:00
+ * @Description: 餐饮集团后台管理系统 - 会员操作页面（优化版）
+-->
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width,initial-scale=1.0">
+<title>吾享餐饮集团 - 会员操作</title>
+<style>
+*{margin:0;padding:0;box-sizing:border-box}
+body{font-family:-apple-system,BlinkMacSystemFont,"Segoe UI","PingFang SC","Hiragino Sans GB","Microsoft YaHei","Helvetica Neue",Helvetica,Arial,sans-serif;background:#f0f2f5;color:#333;overflow:hidden}
+.admin-container{display:flex;height:100vh;width:100vw}
+.sidebar{width:80px;background:#1a1a2e;display:flex;flex-direction:column;align-items:center;padding:20px 0;flex-shrink:0}
+.sidebar-logo{width:50px;height:50px;background:linear-gradient(135deg,#667eea 0%,#764ba2 100%);border-radius:12px;display:flex;align-items:center;justify-content:center;color:#fff;font-weight:bold;font-size:18px;margin-bottom:30px}
+.nav-menu{list-style:none;width:100%;flex:1}
+.nav-item{display:flex;flex-direction:column;align-items:center;padding:16px 0;color:#8b8b9e;cursor:pointer;transition:all .3s;font-size:12px}
+.nav-item:hover{color:#fff;background:rgba(255,255,255,.05)}
+.nav-item.active{color:#fff;background:rgba(255,255,255,.1);border-left:3px solid #667eea}
+.nav-icon{font-size:20px;margin-bottom:6px}
+.main-content{flex:1;display:flex;flex-direction:column;overflow:hidden}
+.topbar{height:60px;background:#fff;display:flex;align-items:center;justify-content:space-between;padding:0 24px;box-shadow:0 2px 8px rgba(0,0,0,.06);flex-shrink:0}
+.topbar-left{display:flex;align-items:center;gap:16px}
+.company-name{font-size:16px;font-weight:600;color:#1a1a2e}
+.tag{padding:4px 12px;border-radius:4px;font-size:12px;font-weight:500}
+.tag-pro{background:#fff7e6;color:#fa8c16;border:1px solid #ffd591}
+.tag-upgrade{background:#fff1f0;color:#f5222d;border:1px solid #ffa39e}
+.topbar-center{flex:1;max-width:400px;margin:0 24px}
+.search-box{width:100%;padding:8px 16px;border:1px solid #d9d9d9;border-radius:20px;font-size:14px;outline:none;transition:border-color .3s}
+.search-box:focus{border-color:#667eea}
+.topbar-right{display:flex;align-items:center;gap:16px}
+.topbar-link{color:#666;text-decoration:none;font-size:14px}
+.topbar-link:hover{color:#667eea}
+.user-avatar{width:36px;height:36px;border-radius:50%;background:linear-gradient(135deg,#667eea 0%,#764ba2 100%);display:flex;align-items:center;justify-content:center;color:#fff;font-weight:500;cursor:pointer}
+.tabs-bar{height:40px;background:#fff;display:flex;align-items:center;padding:0 24px;border-bottom:1px solid #e8e8e8;gap:8px}
+.tab-item{padding:8px 16px;font-size:13px;color:#666;cursor:pointer;border-radius:4px 4px 0 0;display:flex;align-items:center;gap:8px;transition:all .3s}
+.tab-item:hover{color:#667eea}
+.tab-item.active{color:#667eea;background:#f0f5ff;border-bottom:2px solid #667eea}
+.tab-close{font-size:12px;opacity:.6}
+.tab-close:hover{opacity:1}
+.content-area{flex:1;padding:24px;overflow-y:auto}
+.content-header{display:flex;justify-content:space-between;align-items:center;margin-bottom:20px}
+.breadcrumb{font-size:14px;color:#666}
+.breadcrumb a{color:#667eea;text-decoration:none}
+.header-actions{display:flex;gap:12px}
+.btn{padding:8px 16px;border-radius:6px;font-size:14px;cursor:pointer;border:1px solid #d9d9d9;background:#fff;transition:all .3s;display:flex;align-items:center;gap:6px}
+.btn:hover{border-color:#667eea;color:#667eea}
+.btn-primary{background:#667eea;color:#fff;border-color:#667eea}
+.btn-primary:hover{background:#5568d3;color:#fff}
+.member-card{background:#fff;border-radius:12px;padding:24px;box-shadow:0 2px 12px rgba(0,0,0,.04);margin-bottom:24px}
+.member-header{display:flex;justify-content:space-between;align-items:flex-start;margin-bottom:20px}
+.member-info{display:flex;gap:16px}
+.member-avatar{width:60px;height:60px;border-radius:50%;background:linear-gradient(135deg,#667eea 0%,#764ba2 100%);display:flex;align-items:center;justify-content:center;font-size:28px}
+.member-details h3{font-size:18px;font-weight:600;margin-bottom:8px}
+.member-details p{font-size:13px;color:#666;margin-bottom:4px}
+.edit-link{color:#667eea;text-decoration:none;font-size:13px}
+.member-stats{display:flex;gap:32px;padding-top:16px;border-top:1px solid #f0f0f0}
+.stat-item{text-align:center}
+.stat-label{font-size:12px;color:#999;margin-bottom:4px}
+.stat-value{font-size:20px;font-weight:600;color:#1a1a2e}
+.card-info{background:linear-gradient(135deg,#fff9e6 0%,#fff4cc 100%);border-radius:12px;padding:20px;margin-top:16px;border:1px solid #ffe58f}
+.card-header{display:flex;justify-content:space-between;align-items:center;margin-bottom:12px}
+.card-title{font-size:14px;color:#666}
+.card-number{font-size:28px;font-weight:700;color:#1a1a2e;margin-bottom:8px}
+.card-tag{display:inline-block;padding:2px 8px;background:#52c41a;color:#fff;border-radius:4px;font-size:12px;margin-left:8px}
+.card-dates{font-size:13px;color:#666;margin-bottom:4px}
+.card-balance{display:flex;gap:32px;margin-top:16px;padding-top:16px;border-top:1px solid #ffe58f}
+.balance-item{font-size:13px;color:#666}
+.balance-item strong{color:#fa8c16;font-size:16px;margin-left:8px}
+.form-section{background:#fff;border-radius:12px;padding:24px;box-shadow:0 2px 12px rgba(0,0,0,.04)}
+.form-tabs{display:flex;gap:24px;margin-bottom:20px;border-bottom:1px solid #f0f0f0;padding-bottom:12px}
+.form-tab{font-size:14px;color:#666;cursor:pointer;padding-bottom:12px;margin-bottom:-13px;border-bottom:2px solid transparent}
+.form-tab.active{color:#667eea;border-bottom-color:#667eea}
+.form-row{display:flex;align-items:center;margin-bottom:16px}
+.form-label{width:100px;font-size:14px;color:#333;flex-shrink:0}
+.form-input{flex:1;padding:8px 12px;border:1px solid #d9d9d9;border-radius:6px;font-size:14px;outline:none;transition:border-color .3s}
+.form-input:focus{border-color:#667eea}
+.form-select{flex:1;padding:8px 12px;border:1px solid #d9d9d9;border-radius:6px;font-size:14px;outline:none;background:#fff;cursor:pointer}
+.input-with-btn{display:flex;gap:8px;flex:1}
+.btn-add{padding:8px 16px;background:#667eea;color:#fff;border:none;border-radius:6px;cursor:pointer;font-size:14px}
+.data-table{width:100%;border-collapse:collapse;margin-top:16px}
+.data-table th,.data-table td{padding:12px 16px;text-align:left;border-bottom:1px solid #f0f0f0;font-size:14px}
+.data-table th{background:#fafafa;font-weight:500;color:#666}
+.data-table tr:hover{background:#fafafa}
+.footer-bar{position:fixed;bottom:0;right:0;left:80px;background:#fff;padding:16px 24px;box-shadow:0 -2px 8px rgba(0,0,0,.06);display:flex;justify-content:space-between;align-items:center}
+.footer-info{font-size:14px;color:#666}
+.footer-info strong{color:#1a1a2e;font-size:18px}
+.footer-actions{display:flex;gap:12px}
+.checkbox-label{display:flex;align-items:center;gap:8px;font-size:14px;color:#666;margin-top:16px}
+.checkbox-label input{width:16px;height:16px}
+@media (max-width:768px){.sidebar{width:60px}.nav-item{font-size:10px;padding:12px 0}.content-area{padding:16px}.member-stats{gap:16px}}
+</style>
+</head>
+<body>
+
+<div class="admin-container">
+  <!-- 左侧导航栏 -->
+  <aside class="sidebar">
+    <div class="sidebar-logo">吾</div>
+    <ul class="nav-menu">
+      <li class="nav-item active">
+        <span class="nav-icon">📊</span>
+        <span>概况</span>
+      </li>
+      <li class="nav-item">
+        <span class="nav-icon">🏢</span>
+        <span>组织</span>
+      </li>
+      <li class="nav-item">
+        <span class="nav-icon">👥</span>
+        <span>用户</span>
+      </li>
+      <li class="nav-item">
+        <span class="nav-icon"></span>
+        <span>交易</span>
+      </li>
+      <li class="nav-item">
+        <span class="nav-icon">🔗</span>
+        <span>渠道</span>
+      </li>
+      <li class="nav-item">
+        <span class="nav-icon">💳</span>
+        <span>卡券</span>
+      </li>
+      <li class="nav-item">
+        <span class="nav-icon"></span>
+        <span>营销</span>
+      </li>
+      <li class="nav-item">
+        <span class="nav-icon">📱</span>
+        <span>MA</span>
+      </li>
+      <li class="nav-item">
+        <span class="nav-icon">📋</span>
+        <span>订单</span>
+      </li>
+      <li class="nav-item">
+        <span class="nav-icon">📈</span>
+        <span>数据</span>
+      </li>
+      <li class="nav-item">
+        <span class="nav-icon">⚙️</span>
+        <span>配置</span>
+      </li>
+    </ul>
+  </aside>
+
+  <!-- 主内容区 -->
+  <div class="main-content">
+    <!-- 顶部工具栏 -->
+    <header class="topbar">
+      <div class="topbar-left">
+        <span class="company-name">吾享餐饮集团</span>
+        <span class="tag tag-pro">专业版</span>
+        <span class="tag tag-upgrade">即将到期</span>
+      </div>
+      <div class="topbar-center">
+        <input type="text" class="search-box" placeholder="搜索功能">
+      </div>
+      <div class="topbar-right">
+        <a href="#" class="topbar-link">旧版本</a>
+        <a href="#" class="topbar-link">官网</a>
+        <span>🔔</span>
+        <span>❓</span>
+        <div class="user-avatar">管</div>
+      </div>
+    </header>
+
+    <!-- 标签页 -->
+    <div class="tabs-bar">
+      <div class="tab-item active">
+        概况
+      </div>
+      <div class="tab-item">
+        交易
+      </div>
+      <div class="tab-item">
+        会员操作
+        <span class="tab-close">✕</span>
+      </div>
+    </div>
+
+    <!-- 内容区域 -->
+    <div class="content-area">
+      <div class="content-header">
+        <div class="breadcrumb">
+          🕐 2023-12-20 12:00:26 &nbsp;&nbsp;
+          <span style="color: #52c41a;">● 连续正常</span>
+        </div>
+        <div class="header-actions">
+          <span class="breadcrumb">空港商务园西区门店 &gt;</span>
+          <button class="btn">🖨️ 打印</button>
+          <button class="btn">⚙️ 设置</button>
+        </div>
+      </div>
+
+      <!-- 会员信息卡片 -->
+      <div class="member-card">
+        <div class="member-header">
+          <div class="member-info">
+            <div class="member-avatar">👤</div>
+            <div class="member-details">
+              <h3>暂无手机号 <a href="#" class="edit-link">编辑</a></h3>
+              <p>神秘顾客</p>
+              <p>生日(阳历): 2023-10-17</p>
+              <p>邀请人: 张三三 · 赵四四</p>
+              <p>我的邀请码: N19539 </p>
+            </div>
+          </div>
+          <button class="btn btn-primary">退出</button>
+        </div>
+
+        <div class="member-stats">
+          <div class="stat-item">
+            <div class="stat-label">总积分</div>
+            <div class="stat-value">785100</div>
+          </div>
+          <div class="stat-item">
+            <div class="stat-label">电子券</div>
+            <div class="stat-value">7</div>
+          </div>
+          <div class="stat-item">
+            <div class="stat-label">总余额</div>
+            <div class="stat-value">805100.00</div>
+          </div>
+        </div>
+
+        <!-- 卡片信息 -->
+        <div class="card-info">
+          <div class="card-header">
+            <span class="card-title">卡型名称太长太长展示不开了...</span>
+            <span>⋮⋮</span>
+          </div>
+          <div class="card-number">
+            907158906
+            <span class="card-tag">已售卡</span>
+          </div>
+          <div class="card-dates">卡有效期: 2023-10-25 至 2025-10-25</div>
+          <div class="card-dates">卡型有效期: 2023-10-25 至 2025-10-25</div>
+          <div class="card-balance">
+            <div class="balance-item">卡余额(元): <strong>123.00</strong></div>
+            <div class="balance-item">积分(分): <strong>512</strong></div>
+          </div>
+        </div>
+
+        <div style="margin-top: 20px; font-size: 13px; color: #666;">
+          <p>上次消费时间: 2023-05-23 12:00:00</p>
+          <p>上次消费地点: 商务园西区店</p>
+          <p>售卡门店: 天财商龙</p>
+          <a href="#" style="color: #667eea; text-decoration: none; margin-top: 8px; display: inline-block;">查看累计&gt;&gt;</a>
+        </div>
+      </div>
+
+      <!-- 表单区域 -->
+      <div class="form-section">
+        <div class="form-tabs">
+          <div class="form-tab active">异业码消费</div>
+          <div class="form-tab">异业码售卖</div>
+        </div>
+
+        <div class="form-row">
+          <label class="form-label">消费金额:</label>
+          <input type="number" class="form-input" style="width: 120px;" value="0">
+          <span style="margin-left: 8px; color: #666;">元</span>
+        </div>
+
+        <div class="form-row">
+          <label class="form-label">读码方式:</label>
+          <select class="form-select">
+            <option>请选择</option>
+          </select>
+        </div>
+
+        <div class="form-row">
+          <label class="form-label">异业券码:</label>
+          <div class="input-with-btn">
+            <input type="text" class="form-input" placeholder="请输入">
+            <button class="btn-add">添加</button>
+          </div>
+        </div>
+
+        <!-- 表格 -->
+        <table class="data-table">
+          <thead>
+            <tr>
+              <th>序号</th>
+              <th>券名称</th>
+              <th>异业券码</th>
+              <th>面额</th>
+              <th>单价</th>
+            </tr>
+          </thead>
+          <tbody>
+            <tr>
+              <td>1</td>
+              <td>名名称名称名称名称</td>
+              <td>123456789</td>
+              <td>1514.00</td>
+              <td>12.00</td>
+            </tr>
+          </tbody>
+        </table>
+
+        <div style="margin-top: 16px; font-size: 14px; color: #666;">
+          消费数: <strong>0</strong>
+        </div>
+
+        <label class="checkbox-label">
+          <input type="checkbox" checked>
+          异业券核销后，需要打印小票
+        </label>
+        <p style="font-size: 12px; color: #999; margin-top: 8px; margin-left: 24px;">
+          多个券码核销时，打印小票仅支持打印核销总数，无法打印明细
+        </p>
+      </div>
+    </div>
+
+    <!-- 底部操作栏 -->
+    <div class="footer-bar">
+      <div class="footer-info">
+        消费金额 (0) - 券 (0) = <strong>0.00</strong>
+      </div>
+      <div class="footer-actions">
+        <button class="btn btn-primary">确定 Enter</button>
+        <button class="btn">取消 Esc</button>
+      </div>
+    </div>
+  </div>
+</div>
+
+<script>
+document.querySelectorAll('.nav-item').forEach(i=>i.addEventListener('click',function(){document.querySelectorAll('.nav-item').forEach(n=>n.classList.remove('active'));this.classList.add('active')}));
+document.querySelectorAll('.tab-item').forEach(t=>t.addEventListener('click',function(){if(!this.querySelector('.tab-close')){document.querySelectorAll('.tab-item').forEach(n=>n.classList.remove('active'));this.classList.add('active')}}));
+document.querySelectorAll('.form-tab').forEach(t=>t.addEventListener('click',function(){document.querySelectorAll('.form-tab').forEach(n=>n.classList.remove('active'));this.classList.add('active')}));
+document.querySelector('.btn-add').addEventListener('click',function(){const i=document.querySelector('.input-with-btn input'),c=i.value.trim();if(c){const tb=document.querySelector('.data-table tbody'),rc=tb.querySelectorAll('tr').length+1,r=document.createElement('tr');r.innerHTML=`<td>${rc}</td><td>新添加的券名称</td><td>${c}</td><td>0.00</td><td>0.00</td>`;tb.appendChild(r);i.value='';document.querySelector('.form-section strong').textContent=rc-1}else alert('请输入异业券码')});
+document.querySelector('.data-table').addEventListener('dblclick',function(e){const r=e.target.closest('tr');if(r&&confirm('确定删除此行吗?')){r.remove();document.querySelectorAll('.data-table tbody tr').forEach((n,i)=>n.cells[0].textContent=i+1)}});
+document.addEventListener('keydown',function(e){if(e.key==='Enter'&&e.ctrlKey)alert('提交成功!');if(e.key==='Escape'&&confirm('确定取消操作吗?'))location.reload()});
+document.querySelector('.search-box').addEventListener('input',function(e){console.log('搜索:',e.target.value.toLowerCase())});
+document.querySelectorAll('.btn').forEach(b=>{if(b.textContent.includes('打印'))b.addEventListener('click',function(){window.print()})});
+</script>
+
+</body>
+</html>

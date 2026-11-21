@@ -1,0 +1,112 @@
+{
+  "name": "wasily-git",
+  "displayName": "Wasily Git",
+  "description": "内置 Git：不依赖系统 git，支持分支、逐行差异、部分暂存、提交推送与 Agent 迭代闭环。",
+  "version": "0.1.0",
+  "publisher": "wasily",
+  "license": "MIT",
+  "engines": {
+    "vscode": "^1.85.0"
+  },
+  "main": "./extension.js",
+  "activationEvents": [
+    "onStartupFinished"
+  ],
+  "contributes": {
+    "configuration": {
+      "title": "Wasily Git",
+      "properties": {
+        "wasily-git.serverUrl": {
+          "type": "string",
+          "default": "",
+          "description": "Wasily 后端地址；留空则复用 wasily-ai.serverUrl 或 http://127.0.0.1:8000"
+        },
+        "wasily-git.autoRefresh": {
+          "type": "boolean",
+          "default": true,
+          "description": "保存或切换文件后自动刷新源代码管理状态"
+        }
+      }
+    },
+    "commands": [
+      { "command": "wasily-git.refresh", "title": "刷新仓库状态", "category": "Wasily Git" },
+      { "command": "wasily-git.stage", "title": "暂存文件", "category": "Wasily Git" },
+      { "command": "wasily-git.unstage", "title": "取消暂存", "category": "Wasily Git" },
+      { "command": "wasily-git.stageAll", "title": "暂存全部修改", "category": "Wasily Git" },
+      { "command": "wasily-git.unstageAll", "title": "取消全部暂存", "category": "Wasily Git" },
+      { "command": "wasily-git.openDiff", "title": "查看逐行差异", "category": "Wasily Git" },
+      { "command": "wasily-git.stageHunk", "title": "选择变更块暂存", "category": "Wasily Git" },
+      { "command": "wasily-git.commitStaged", "title": "提交已暂存内容", "category": "Wasily Git" },
+      { "command": "wasily-git.switchBranch", "title": "切换分支", "category": "Wasily Git" },
+      { "command": "wasily-git.createBranch", "title": "新建 feature 分支", "category": "Wasily Git" },
+      { "command": "wasily-git.merge", "title": "合并分支（含冲突处理）", "category": "Wasily Git" },
+      { "command": "wasily-git.clone", "title": "克隆仓库", "category": "Wasily Git" },
+      { "command": "wasily-git.fetch", "title": "获取远端更新", "category": "Wasily Git" },
+      { "command": "wasily-git.pull", "title": "拉取（快进）", "category": "Wasily Git" },
+      { "command": "wasily-git.push", "title": "推送当前分支", "category": "Wasily Git" },
+      { "command": "wasily-git.showHistory", "title": "查看提交历史", "category": "Wasily Git" },
+      { "command": "wasily-git.resetToCommit", "title": "回滚到该提交（mixed）", "category": "Wasily Git" },
+      { "command": "wasily-git.branchFromCommit", "title": "从此提交新建分支", "category": "Wasily Git" },
+      { "command": "wasily-git.startIteration", "title": "发起一次迭代（隔离工作区）", "category": "Wasily Git" },
+      { "command": "wasily-git.verifyIteration", "title": "校验迭代（语法 / 测试）", "category": "Wasily Git" },
+      { "command": "wasily-git.commitIteration", "title": "提交并推送迭代", "category": "Wasily Git" },
+      { "command": "wasily-git.abortIteration", "title": "放弃迭代", "category": "Wasily Git" },
+      { "command": "wasily-git.openIteration", "title": "在文件管理器中打开隔离目录", "category": "Wasily Git" },
+      { "command": "wasily-git.showAudit", "title": "查看迭代审计轨迹", "category": "Wasily Git" }
+    ],
+    "menus": {
+      "scm/title": [
+        { "command": "wasily-git.refresh", "group": "navigation@1" },
+        { "command": "wasily-git.push", "group": "navigation@2" },
+        { "command": "wasily-git.pull", "group": "navigation@3" },
+        { "command": "wasily-git.switchBranch", "group": "1_branch@1" },
+        { "command": "wasily-git.createBranch", "group": "1_branch@2" },
+        { "command": "wasily-git.merge", "group": "1_branch@3" },
+        { "command": "wasily-git.fetch", "group": "1_branch@4" },
+        { "command": "wasily-git.clone", "group": "1_branch@5" },
+        { "command": "wasily-git.stageAll", "group": "2_tools@1" },
+        { "command": "wasily-git.unstageAll", "group": "2_tools@2" },
+        { "command": "wasily-git.startIteration", "group": "3_loop@1" },
+        { "command": "wasily-git.showAudit", "group": "3_loop@2" }
+      ],
+      "scm/resourceState/context": [
+        { "command": "wasily-git.openDiff", "group": "navigation@1" },
+        { "command": "wasily-git.stage", "when": "scmResourceGroup == changes", "group": "1_modification@1" },
+        { "command": "wasily-git.unstage", "when": "scmResourceGroup == staged", "group": "1_modification@1" },
+        { "command": "wasily-git.stageHunk", "when": "scmResourceGroup == changes", "group": "1_modification@2" }
+      ],
+      "scm/resourceGroup/context": [
+        { "command": "wasily-git.stageAll", "when": "scmResourceGroup == changes", "group": "inline@1" },
+        { "command": "wasily-git.unstageAll", "when": "scmResourceGroup == staged", "group": "inline@1" }
+      ],
+      "view/title": [
+        { "command": "wasily-git.showHistory", "when": "view == wasily-git.history", "group": "navigation@1" },
+        { "command": "wasily-git.startIteration", "when": "view == wasily-git.iterations", "group": "navigation@1" },
+        { "command": "wasily-git.refresh", "when": "view == wasily-git.iterations", "group": "navigation@2" }
+      ],
+      "view/item/context": [
+        { "command": "wasily-git.resetToCommit", "when": "view == wasily-git.history && viewItem == commit", "group": "1_edit@1" },
+        { "command": "wasily-git.branchFromCommit", "when": "view == wasily-git.history && viewItem == commit", "group": "1_edit@2" },
+        { "command": "wasily-git.verifyIteration", "when": "view == wasily-git.iterations && viewItem == iteration", "group": "inline@1" },
+        { "command": "wasily-git.commitIteration", "when": "view == wasily-git.iterations && viewItem == iteration", "group": "inline@2" },
+        { "command": "wasily-git.openIteration", "when": "view == wasily-git.iterations && viewItem == iteration", "group": "1_open@1" },
+        { "command": "wasily-git.abortIteration", "when": "view == wasily-git.iterations && viewItem == iteration", "group": "2_danger@1" }
+      ]
+    },
+    "viewsContainers": {
+      "activitybar": [
+        {
+          "id": "wasily-git",
+          "title": "Wasily Git",
+          "icon": "resources/icon.svg"
+        }
+      ]
+    },
+    "views": {
+      "wasily-git": [
+        { "id": "wasily-git.history", "name": "提交历史" },
+        { "id": "wasily-git.iterations", "name": "迭代记录" }
+      ]
+    }
+  }
+}

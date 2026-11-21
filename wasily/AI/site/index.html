@@ -1,0 +1,470 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Wasily · 面向任务的 AI 开发工作台</title>
+<meta name="description" content="Wasily 是本地优先的 AI 开发工作台：任务编排、知识库、MCP 工具总线与自动更新，一个入口全部打通。">
+<link rel="stylesheet" href="/site/assets/site.css">
+<link rel="icon" href="/site/assets/favicon.svg" type="image/svg+xml">
+</head>
+<body>
+<div class="bg-grid" aria-hidden="true"></div>
+<div class="bg-glow" aria-hidden="true"></div>
+
+<header class="topbar">
+  <a class="brand" href="#/home" aria-label="Wasily 首页">
+    <span class="brand-mark">
+      <svg viewBox="0 0 32 32" width="22" height="22" aria-hidden="true">
+        <path d="M4 22 9 9l7 9 7-9 5 13" fill="none" stroke="currentColor" stroke-width="2.6" stroke-linecap="round" stroke-linejoin="round"/>
+      </svg>
+    </span>
+    <span class="brand-name">WASILY</span>
+    <span class="brand-tag">网页版</span>
+  </a>
+  <nav class="nav" id="nav">
+    <a href="#/home" data-nav="home">首页</a>
+    <a href="#/workbench" data-nav="workbench">工作台</a>
+    <a href="#/kb" data-nav="kb">知识库</a>
+    <a href="/apps" target="_blank" rel="noopener">应用</a>
+    <a href="/site/tech.html">技术文档</a>
+    <a href="#/settings" data-nav="settings">设置</a>
+    <a href="#/changelog" data-nav="changelog">更新日志</a>
+    <a href="#/about" data-nav="about">关于</a>
+  </nav>
+  <div class="topbar-right">
+    <span class="pill" id="top-version">v0.3.0</span>
+    <a class="btn btn-primary btn-sm" href="/chat" target="_blank" rel="noopener">打开工作台</a>
+  </div>
+</header>
+
+<main id="app">
+
+  <!-- 首页 -->
+  <section class="page" data-page="home">
+    <div class="hero">
+      <span class="eyebrow">独立产品网站 · 本地优先 · 数据不出机</span>
+      <h1>面向任务的<br><span class="grad">AI 开发工作台</span></h1>
+      <p class="hero-sub">
+        从需求拆解、方案生成到成果交付，Wasily 把任务编排、知识库、MCP 工具总线与自动更新
+        收进同一个入口。你可以在网页端启动任务，在桌面端继续深入，项目与上下文不会中断。
+      </p>
+      <div class="hero-actions">
+        <a class="btn btn-primary" href="/chat" target="_blank" rel="noopener">开始一个任务</a>
+        <a class="btn btn-ghost" href="#/kb">进入知识库</a>
+      </div>
+      <div class="status-row" id="hero-status">
+        <span class="status-item"><i class="dot"></i>后端在线</span>
+        <span class="status-item" id="st-model">本地模型</span>
+        <span class="status-item" id="st-kb">知识库索引</span>
+        <span class="status-item" id="st-ide">IDE 桥</span>
+      </div>
+    </div>
+
+    <div class="section">
+      <div class="section-head">
+        <h2>一个工作台，覆盖完整开发链路</h2>
+        <p>写作、编码、检索、总结、发布，交给同一套智能体与工具链。</p>
+      </div>
+      <div class="grid cols-3">
+        <article class="card">
+          <div class="card-icon">01</div>
+          <h3>任务工作台</h3>
+          <p>用自然语言描述需求，智能体自动检索上下文、拆分步骤、调用工具并交付结果。</p>
+        </article>
+        <article class="card">
+          <div class="card-icon">02</div>
+          <h3>双模式切换</h3>
+          <p>IDE 模式保留精细控制，SOLO 模式交给 AI 主导，随时一键切换。</p>
+          <button class="link-btn" data-mode="ide">切换到 IDE 模式 →</button>
+        </article>
+        <article class="card">
+          <div class="card-icon">03</div>
+          <h3>知识库</h3>
+          <p>本地全类型文件检索与理解，视频、图片、Office 文档统一入库，可生成报告与网页。</p>
+          <a class="link-btn" href="#/kb">查看知识库 →</a>
+        </article>
+        <article class="card">
+          <div class="card-icon">04</div>
+          <h3>本地模型</h3>
+          <p>默认由本机模型驱动，支持接入自定义 API，隐私模式下内容不参与训练。</p>
+        </article>
+        <article class="card">
+          <div class="card-icon">05</div>
+          <h3>MCP 工具总线</h3>
+          <p>文件、浏览器、知识库、远程主机等能力统一注册为 MCP 工具，所有上层程序共用。</p>
+          <a class="link-btn" href="#/settings">查看已接入服务 →</a>
+        </article>
+        <article class="card">
+          <div class="card-icon">06</div>
+          <h3>自动更新</h3>
+          <p>本地或局域网清单检查新版本，下载校验后暂存，重启完成切换。</p>
+          <a class="link-btn" href="#/settings">检查更新 →</a>
+        </article>
+      </div>
+    </div>
+
+    <div class="section">
+      <div class="split">
+        <div class="split-copy">
+          <h2>双形态，同一套数据</h2>
+          <p class="muted">
+            Agent 窗口以任务为中心，适合批量推进与变更审核；IDE 窗口以代码为中心，
+            适合逐文件精读与调试。两者共享任务、会话与配置，切换不丢上下文。
+          </p>
+          <ul class="ticks">
+            <li>任务进度与产物在网页端、桌面端同步</li>
+            <li>会话可跨端续聊，历史记录随时接上</li>
+            <li>知识库与工具调用对两种形态同时开放</li>
+          </ul>
+        </div>
+        <div class="split-visual">
+          <div class="pane">
+            <div class="pane-title">Agent 窗口</div>
+            <div class="pane-line w80"></div>
+            <div class="pane-line w60"></div>
+            <div class="pane-line w90"></div>
+            <div class="pane-chip">任务进行中</div>
+          </div>
+          <div class="pane">
+            <div class="pane-title">IDE 窗口</div>
+            <div class="pane-line w70"></div>
+            <div class="pane-line w95"></div>
+            <div class="pane-line w50"></div>
+            <div class="pane-chip alt">代码已保存</div>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <div class="section">
+      <div class="section-head">
+        <h2>三端协同</h2>
+        <p>电脑上启动任务，移动端查看进度，回到桌面继续深入。</p>
+      </div>
+      <div class="grid cols-3">
+        <article class="card flat">
+          <h3>桌面端</h3>
+          <p>独立应用，提供 Agent 与 IDE 双窗口，适合长期开发与复杂项目。</p>
+          <span class="badge">已就绪</span>
+        </article>
+        <article class="card flat">
+          <h3>网页端</h3>
+          <p>无需安装，浏览器打开即可管理任务、检索知识库、调整设置。</p>
+          <span class="badge live">当前页面</span>
+        </article>
+        <article class="card flat">
+          <h3>移动端</h3>
+          <p>随时下发任务、查看进度与结果，离线时自动转交云端执行。</p>
+          <span class="badge muted">规划中</span>
+        </article>
+      </div>
+    </div>
+
+    <div class="section">
+      <div class="section-head">
+        <h2>开发工具链与安全</h2>
+        <p>保留传统 IDE 的掌控感，同时把风险挡在执行之前。</p>
+      </div>
+      <div class="grid cols-2">
+        <div class="card">
+          <h3>工具链</h3>
+          <ul class="plain">
+            <li>代码编辑、运行与调试</li>
+            <li>Git 工作流与 AI 提交信息</li>
+            <li>变更审查：摘要、流程图、diff</li>
+            <li>插件扩展与远程开发</li>
+          </ul>
+        </div>
+        <div class="card">
+          <h3>安全能力</h3>
+          <ul class="plain">
+            <li>隐私模式：对话与代码不参与训练</li>
+            <li>权限审批：高风险命令执行前拦截</li>
+            <li>本地优先：文件始终留在本机</li>
+            <li>操作留痕：日志按启动会话归档</li>
+          </ul>
+        </div>
+      </div>
+    </div>
+
+    <div class="cta-band">
+      <div>
+        <h2>把下一个任务交给 Wasily</h2>
+        <p>打开工作台，描述你要做的事，剩下的交给智能体。</p>
+      </div>
+      <div class="cta-actions">
+        <a class="btn btn-primary" href="/chat" target="_blank" rel="noopener">开始使用</a>
+        <a class="btn btn-ghost" href="#/settings">先看设置</a>
+      </div>
+    </div>
+  </section>
+
+  <!-- 工作台 -->
+  <section class="page" data-page="workbench" hidden>
+    <div class="page-head">
+      <div>
+        <h1>工作台</h1>
+        <p class="muted">跨端会话、任务状态与运行环境，一屏掌握。</p>
+      </div>
+      <div class="page-actions">
+        <a class="btn btn-primary" href="/chat" target="_blank" rel="noopener">新建任务</a>
+        <a class="btn btn-ghost" href="/agent" target="_blank" rel="noopener">Agent 窗口</a>
+      </div>
+    </div>
+
+    <div class="grid cols-4 metric-row">
+      <div class="metric"><span id="m-sessions">-</span><label>历史会话</label></div>
+      <div class="metric"><span id="m-running">-</span><label>运行中任务</label></div>
+      <div class="metric"><span id="m-ide">-</span><label>IDE 连接</label></div>
+      <div class="metric"><span id="m-model">-</span><label>当前模型</label></div>
+    </div>
+
+    <div class="panel">
+      <div class="panel-head">
+        <h2>最近会话</h2>
+        <button class="btn btn-ghost btn-sm" id="btn-refresh-sessions">刷新</button>
+      </div>
+      <div id="session-list" class="list"><div class="empty">加载中…</div></div>
+    </div>
+
+    <div class="panel">
+      <div class="panel-head">
+        <h2>任务运行状态</h2>
+        <span class="hint">数据来自 /v1/agent/runtime</span>
+      </div>
+      <div id="runtime-list" class="list"><div class="empty">加载中…</div></div>
+    </div>
+  </section>
+
+  <!-- 知识库 -->
+  <section class="page" data-page="kb" hidden>
+    <div class="page-head">
+      <div>
+        <h1>知识库</h1>
+        <p class="muted">本地全类型文件的检索、理解与总结。视频、图片、文档统一入库。</p>
+      </div>
+      <div class="page-actions">
+        <a class="btn btn-primary" href="/kb" target="_blank" rel="noopener">打开知识库工作台</a>
+      </div>
+    </div>
+
+    <div class="grid cols-4 metric-row">
+      <div class="metric"><span id="k-files">-</span><label>已索引文件</label></div>
+      <div class="metric"><span id="k-chunks">-</span><label>内容分块</label></div>
+      <div class="metric"><span id="k-size">-</span><label>索引体积</label></div>
+      <div class="metric"><span id="k-status">-</span><label>索引状态</label></div>
+    </div>
+
+    <div class="panel">
+      <div class="panel-head">
+        <h2>检索</h2>
+        <span class="hint">语义 + 关键词混合检索</span>
+      </div>
+      <form class="searchbar" id="kb-form">
+        <input id="kb-q" type="search" placeholder="搜索文件名、正文、图片描述…" autocomplete="off">
+        <button class="btn btn-primary" type="submit">搜索</button>
+      </form>
+      <div id="kb-results" class="list"><div class="empty">输入关键词开始检索</div></div>
+    </div>
+
+    <div class="panel">
+      <div class="panel-head">
+        <h2>最近入库</h2>
+        <button class="btn btn-ghost btn-sm" id="btn-kb-recent">刷新</button>
+      </div>
+      <div id="kb-recent" class="list"><div class="empty">加载中…</div></div>
+    </div>
+  </section>
+
+  <!-- 设置 -->
+  <section class="page" data-page="settings" hidden>
+    <div class="page-head">
+      <div>
+        <h1>设置</h1>
+        <p class="muted">日志、更新、运行环境与模式切换。</p>
+      </div>
+    </div>
+
+    <div class="panel">
+      <div class="panel-head"><h2>日志</h2><span class="hint">默认与 Trae 一致：用户数据目录 / logs / 启动时间戳</span></div>
+      <div class="kv">
+        <div><label>当前根目录</label><code id="log-root">-</code></div>
+        <div><label>本次会话目录</label><code id="log-session">-</code></div>
+        <div><label>默认目录</label><code id="log-default">-</code></div>
+      </div>
+      <div class="field">
+        <label for="log-path">自定义日志存储路径</label>
+        <div class="field-row">
+          <input id="log-path" type="text" placeholder="留空使用默认目录，例如 D:\\Wasily\\logs">
+          <button class="btn btn-primary" id="btn-log-save">保存</button>
+          <button class="btn btn-ghost" id="btn-log-reset">恢复默认</button>
+          <button class="btn btn-ghost" id="btn-log-open">打开目录</button>
+        </div>
+        <p class="field-hint">保存后立即切换到新目录，本次启动的日志会写入新位置的会话子目录。</p>
+      </div>
+      <div class="field">
+        <label for="log-keep">历史日志保留天数</label>
+        <div class="field-row">
+          <input id="log-keep" type="number" min="0" max="3650" class="short">
+          <button class="btn btn-ghost" id="btn-log-purge">清理过期日志</button>
+        </div>
+      </div>
+      <div class="panel-head sub"><h3>本次会话日志</h3></div>
+      <div id="log-files" class="list compact"></div>
+      <pre id="log-tail" class="logbox">选择上方日志文件查看末尾内容</pre>
+    </div>
+
+    <div class="panel">
+      <div class="panel-head"><h2>版本与更新</h2><span class="hint" id="upd-channel-hint">stable</span></div>
+      <div class="kv">
+        <div><label>当前版本</label><code id="upd-current">-</code></div>
+        <div><label>上次检查</label><code id="upd-last">-</code></div>
+        <div><label>待安装</label><code id="upd-pending">无</code></div>
+      </div>
+      <div class="field">
+        <label for="upd-manifest">更新清单地址</label>
+        <div class="field-row">
+          <input id="upd-manifest" type="text" placeholder="留空读取 updates/latest.json，可填局域网 http 地址">
+          <button class="btn btn-primary" id="btn-upd-save">保存</button>
+        </div>
+      </div>
+      <div class="field-row">
+        <label class="inline"><input type="checkbox" id="upd-auto"> 启动时自动检查</label>
+        <button class="btn btn-primary" id="btn-upd-check">检查更新</button>
+      </div>
+      <div id="upd-result" class="update-result">尚未检查</div>
+    </div>
+
+    <div class="panel">
+      <div class="panel-head"><h2>运行环境</h2><span class="hint">MCP 服务与端口</span></div>
+      <div id="env-list" class="list compact"></div>
+    </div>
+
+    <div class="panel">
+      <div class="panel-head"><h2>输入优化</h2><span class="hint">对话框右上角 ✨ 按钮</span></div>
+      <div class="field">
+        <label for="opt-mode">优化模式</label>
+        <div class="field-row">
+          <select id="opt-mode">
+            <option value="basic">基础版（规则改写，即时返回）</option>
+            <option value="llm">高级版（本地模型改写，较慢）</option>
+            <option value="off">关闭</option>
+          </select>
+          <button class="btn btn-primary" id="btn-opt-save">保存</button>
+          <button class="btn btn-ghost" id="btn-opt-test">试一条</button>
+        </div>
+        <p class="field-hint">基础版不占用模型，输入时不会卡顿；高级版可在下方自定义系统提示词。</p>
+      </div>
+      <div class="field">
+        <label for="opt-template">高级版系统提示词（留空使用内置）</label>
+        <textarea id="opt-template" rows="4" placeholder="例如：你是资深提示词工程师，把草稿改写成结构清晰、可直接执行的中文提示词……"></textarea>
+      </div>
+      <pre id="opt-preview" class="logbox">点击「试一条」查看改写结果</pre>
+    </div>
+
+    <div class="panel">
+      <div class="panel-head"><h2>自动检索与任务路由</h2><span class="hint">自动化优先</span></div>
+      <div class="field-row">
+        <label class="inline"><input type="checkbox" id="web-auto"> 公司/时效类提问自动联网检索</label>
+        <select id="web-engine">
+          <option value="bing">Bing（默认）</option>
+          <option value="baidu">百度</option>
+        </select>
+        <button class="btn btn-ghost btn-sm" id="btn-web-save">保存</button>
+      </div>
+      <div class="field-row" style="margin-top:12px">
+        <label class="inline"><input type="checkbox" id="router-auto"> 自动匹配技能与智能体</label>
+        <label class="inline"><input type="checkbox" id="router-preflight"> 执行前告知依赖与权限</label>
+        <button class="btn btn-ghost btn-sm" id="btn-router-save">保存</button>
+      </div>
+    </div>
+
+    <div class="panel">
+      <div class="panel-head">
+        <h2>大脑训练（微调评估）</h2>
+        <button class="btn btn-primary btn-sm" id="btn-train-assess">评估当前环境</button>
+      </div>
+      <div id="train-assess" class="update-result">尚未评估。评估只做只读探测，不会启动训练。</div>
+    </div>
+
+    <div class="panel">
+      <div class="panel-head"><h2>工作模式</h2><span class="hint">与桌面端共用同一条总线</span></div>
+      <div class="field-row">
+        <button class="btn btn-ghost" data-mode="ide">IDE 模式</button>
+        <button class="btn btn-ghost" data-mode="solo">SOLO 模式</button>
+        <span class="hint" id="mode-state">当前：-</span>
+      </div>
+    </div>
+  </section>
+
+  <!-- 更新日志 -->
+  <section class="page" data-page="changelog" hidden>
+    <div class="page-head">
+      <div>
+        <h1>更新日志</h1>
+        <p class="muted">每个版本的改动与修复记录。</p>
+      </div>
+      <div class="page-actions">
+        <a class="btn btn-ghost" href="/changelog" target="_blank" rel="noopener">在新标签打开</a>
+      </div>
+    </div>
+    <iframe class="changelog-frame" src="/changelog" title="更新日志"></iframe>
+  </section>
+
+  <!-- 关于 -->
+  <section class="page" data-page="about" hidden>
+    <div class="page-head">
+      <div>
+        <h1>关于 Wasily</h1>
+        <p class="muted">本地优先的 AI 开发工作台，网页端与桌面端共享同一套能力。</p>
+      </div>
+    </div>
+    <div class="grid cols-2">
+      <div class="card">
+        <h3>版本</h3>
+        <div class="kv">
+          <div><label>产品</label><code>Wasily</code></div>
+          <div><label>版本</label><code id="about-version">-</code></div>
+          <div><label>构建</label><code id="about-build">-</code></div>
+          <div><label>通道</label><code id="about-channel">-</code></div>
+        </div>
+      </div>
+      <div class="card">
+        <h3>服务入口</h3>
+        <div class="kv">
+          <div><label>后端 API</label><code>127.0.0.1:8000</code></div>
+          <div><label>独立网站</label><code>127.0.0.1:8000/site</code></div>
+          <div><label>知识库</label><code>127.0.0.1:8000/kb</code></div>
+          <div><label>IDE 桥</label><code>127.0.0.1:18753</code></div>
+        </div>
+      </div>
+    </div>
+    <div class="panel">
+      <div class="panel-head"><h2>数据位置</h2></div>
+      <div class="kv">
+        <div><label>日志</label><code id="about-logs">-</code></div>
+        <div><label>知识库索引</label><code>wasily/AI/kb_data/kb.db</code></div>
+        <div><label>会话存储</label><code>wasily/AI/sessions_store</code></div>
+      </div>
+    </div>
+  </section>
+
+</main>
+
+<footer class="footer">
+  <div class="footer-left">
+    <span class="brand-name small">WASILY</span>
+    <span class="muted">本地优先 · 数据不出机</span>
+  </div>
+  <div class="footer-right">
+    <a href="#/about">关于</a>
+    <a href="#/changelog">更新日志</a>
+    <a href="/docs" target="_blank" rel="noopener">帮助文档</a>
+  </div>
+</footer>
+
+<div id="toast" class="toast" role="status" aria-live="polite"></div>
+<script src="/site/assets/site.js"></script>
+</body>
+</html>

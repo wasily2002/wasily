@@ -1,0 +1,51 @@
+# wasily AI 后端依赖
+# 环境：Windows 10/11 + Python 3.12（与当前开发环境一致）
+# 安装：pip install -r requirements.txt
+# 说明：分段的“可选”依赖按需安装；视觉/向量段包含 PyTorch，体积较大
+#
+# 另需外部组件（非 pip，可自动下载，无需手工安装）：
+#   - cloudflared  ：站点公网映射，首次点“开启映射”自动下载
+#   - ffmpeg       ：部分音视频处理需要，放在 PATH 即可
+
+# ===== 核心运行（必需）=====
+llama-cpp-python==0.3.4
+numpy==2.5.3
+pillow==12.3.0
+requests==2.34.2
+psutil==7.2.2
+cryptography==50.0.2
+# 内置 Git（git_bridge.py / git_runtime.py）：纯 Python 读写 .git，不依赖系统 git.exe
+dulwich==1.2.21
+dulwich==1.2.21
+merge3==1.0.0
+
+# ===== 文档解析 / 知识库 =====
+python-docx==1.2.0
+PyMuPDF==1.28.2
+openpyxl==3.1.5
+python-pptx==1.0.2
+
+# ===== 语音合成 / 音频 =====
+edge-tts==7.3.1
+soundfile==0.14.0
+av==19.0.2
+
+# ===== 可选：语音输入 =====
+sounddevice==0.5.6
+
+# ===== 可选：视觉理解 / 向量检索（体积大）=====
+torch==2.14.1
+torchvision==0.29.1
+torchaudio==2.11.0
+transformers==5.19.0
+sentence-transformers==6.2.0
+scikit-learn==1.9.1
+safetensors==0.8.0
+opencv-python==5.0.0.93
+
+# ===== 可选：Windows 桌面自动化 =====
+pyautogui==0.9.54
+pyperclip==1.11.0
+
+# ===== 可选：训练 / 数据处理脚本 =====
+tqdm==4.70.1

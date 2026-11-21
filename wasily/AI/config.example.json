@@ -1,0 +1,45 @@
+{
+  "server": {
+    "host": "127.0.0.1",
+    "port": 8000,
+    "model_path": "models/model.gguf",
+    "n_ctx": 8192,
+    "max_generate_tokens": 512,
+    "n_gpu_layers": 0,
+    "n_threads": 0
+  },
+  "models": [
+    {
+      "id": "local",
+      "name": "本地模型",
+      "provider": "llama",
+      "path": "models/model.gguf",
+      "type": "chat",
+      "n_gpu_layers": 0
+    },
+    {
+      "id": "remote-openai",
+      "name": "OpenAI 兼容 API",
+      "provider": "openai",
+      "url": "https://api.openai.com/v1",
+      "api_key": "",
+      "model_name": "gpt-4o-mini",
+      "type": "chat"
+    }
+  ],
+  "current_model": "local",
+  "ai_name": "小助手",
+  "network": {
+    "proxy": "system",
+    "proxy_url": ""
+  },
+  "mcp": {
+    "gateway_token": ""
+  },
+  "update": {
+    "channel": "stable",
+    "manifest_url": "",
+    "auto_check": true,
+    "last_version": "0.5.0"
+  }
+}

@@ -1,0 +1,47 @@
+name: checks
+
+on:
+  push:
+    branches: [main, develop, "feature/**"]
+  pull_request:
+    branches: [main, develop]
+
+jobs:
+  syntax:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      - name: Python 语法检查
+        run: |
+          python - <<'PY'
+          import pathlib, py_compile, sys
+          roots = ["wasily/AI/git_core", "wasily/AI/tests", "scripts"]
+          bad = []
+          for root in roots:
+              for p in pathlib.Path(root).rglob("*.py"):
+                  try:
+                      py_compile.compile(str(p), doraise=True)
+                  except Exception as exc:
+                      bad.append(f"{p}: {exc}")
+          if bad:
+              print("\n".join(bad))
+              sys.exit(1)
+          print("python syntax ok")
+          PY
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "20"
+      - name: JS 语法检查
+        run: |
+          node --check wasily/tools/wasily-ide-src/extensions/wasily-ai/extension.js
+          node --check wasily/tools/wasily-ide-src/extensions/wasily-ai/mcpHost.js
+          node --check wasily/tools/wasily-ide-src/src/vs/code/electron-browser/workbench/trae-titlebar.v47.js
+      - name: Git 内核单元测试
+        run: |
+          pip install dulwich
+          python -m unittest discover -s wasily/AI/tests -p "test_git_*.py" -v
+      - name: 仓库卫生扫描
+        run: python scripts/repo_guard.py

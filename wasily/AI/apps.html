@@ -1,0 +1,276 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>内置应用 · Wasily</title>
+<style>
+:root{--bg:#07090d;--panel:#10151f;--line:rgba(255,255,255,.09);--text:#e8ecf5;
+--muted:#8c95a8;--accent:#6f8cff;--ok:#19c39c;--err:#ff6b6b}
+*{box-sizing:border-box}
+body{margin:0;background:var(--bg);color:var(--text);
+font:14px/1.65 "Segoe UI","Microsoft YaHei",system-ui;min-height:100vh}
+a{color:var(--accent);text-decoration:none}
+header{display:flex;align-items:center;gap:14px;padding:0 20px;height:56px;
+border-bottom:1px solid var(--line);background:rgba(7,9,13,.9);
+position:sticky;top:0;z-index:5}
+.logo{font-weight:800;letter-spacing:.16em;font-size:13px}
+.badge{font-size:11px;color:var(--accent);border:1px solid rgba(111,140,255,.35);
+border-radius:999px;padding:2px 9px}
+.spacer{flex:1}
+.tabs{display:flex;gap:4px;padding:12px 20px 0;max-width:1280px;margin:0 auto}
+.tab{padding:8px 16px;border-radius:9px;color:var(--muted);cursor:pointer;border:1px solid transparent;
+background:none;font:inherit}
+.tab.active{color:var(--text);background:rgba(111,140,255,.14);border-color:rgba(111,140,255,.3)}
+main{max-width:1280px;margin:0 auto;padding:16px 20px 40px}
+.bar{display:flex;gap:10px;align-items:center;margin-bottom:14px;flex-wrap:wrap}
+input,textarea,select{background:#0c1018;border:1px solid var(--line);color:var(--text);
+border-radius:9px;padding:9px 12px;font:inherit;outline:none}
+input:focus,textarea:focus{border-color:rgba(111,140,255,.6)}
+input[type=text]{flex:1;min-width:240px}
+textarea{width:100%;resize:vertical;font-family:Consolas,"Cascadia Code",monospace;font-size:13px}
+.btn{padding:8px 15px;border-radius:9px;border:1px solid var(--line);background:rgba(255,255,255,.04);
+color:var(--text);cursor:pointer;font:inherit;white-space:nowrap}
+.btn:hover{background:rgba(255,255,255,.08)}
+.btn.primary{background:linear-gradient(135deg,#6f8cff,#4f6ef2);border-color:transparent;color:#fff}
+.btn:disabled{opacity:.45;cursor:not-allowed}
+.panel{background:var(--panel);border:1px solid var(--line);border-radius:14px;padding:16px;margin-bottom:14px}
+.panel h3{margin:0 0 10px;font-size:15px}
+.meta{color:var(--muted);font-size:12.5px;margin-bottom:8px;word-break:break-all}
+pre.view{white-space:pre-wrap;word-break:break-word;background:#070a10;border:1px solid var(--line);
+border-radius:10px;padding:14px;max-height:380px;overflow:auto;margin:0;font-size:13px}
+.grid2{display:grid;grid-template-columns:1fr 1fr;gap:12px}
+video{width:100%;max-height:420px;background:#000;border-radius:10px}
+.frames{display:flex;gap:10px;flex-wrap:wrap;margin-top:12px}
+.frames figure{margin:0;width:180px}
+.frames img{width:100%;border-radius:8px;border:1px solid var(--line);display:block}
+.frames figcaption{font-size:11.5px;color:var(--muted);margin-top:4px}
+iframe{width:100%;height:520px;border:1px solid var(--line);border-radius:12px;background:#fff}
+.hint{color:var(--muted);font-size:12.5px}
+.list{display:grid;gap:6px;margin-top:10px;max-height:260px;overflow:auto}
+.item{padding:8px 10px;border:1px solid var(--line);border-radius:8px;font-size:12.5px;cursor:pointer;
+background:#0c1018;word-break:break-all}
+.item:hover{border-color:rgba(111,140,255,.5)}
+#toast{position:fixed;left:50%;bottom:28px;transform:translate(-50%,14px);opacity:0;
+background:#1b2333;border:1px solid var(--line);border-radius:999px;padding:9px 18px;
+font-size:13px;transition:.2s;pointer-events:none;z-index:9}
+#toast.show{opacity:1;transform:translate(-50%,0)}
+#toast.err{border-color:rgba(255,107,107,.6)}
+[hidden]{display:none!important}
+@media(max-width:760px){.grid2{grid-template-columns:1fr}.tabs{overflow:auto}}
+</style>
+</head>
+<body>
+<header>
+  <span class="logo">WASILY</span><span class="badge">内置应用</span>
+  <span class="spacer"></span>
+  <a href="/site" target="_blank" rel="noopener">返回网站</a>
+  <a href="/kb" target="_blank" rel="noopener">知识库</a>
+</header>
+
+<div class="tabs" id="tabs">
+  <button class="tab active" data-tab="office">Office 文档</button>
+  <button class="tab" data-tab="video">视频播放器</button>
+  <button class="tab" data-tab="code">代码编辑器</button>
+  <button class="tab" data-tab="browser">浏览器</button>
+</div>
+
+<main>
+  <div class="bar">
+    <input id="path" type="text" placeholder="输入文件绝对路径，例如 D:\项目\方案.docx">
+    <button class="btn primary" id="btn-open">打开</button>
+    <span class="hint" id="scope-hint">允许范围：工作区</span>
+  </div>
+
+  <!-- Office -->
+  <section id="pane-office">
+    <div class="panel">
+      <h3>文档内容</h3>
+      <div class="meta" id="office-meta">尚未打开文件</div>
+      <pre class="view" id="office-view">支持 docx / xlsx / pptx。打开后显示正文，可执行替换、追加段落、写单元格、加幻灯片等操作。</pre>
+    </div>
+    <div class="panel">
+      <h3>AI 可执行编辑</h3>
+      <div class="hint">操作以 JSON 数组提交，例如：
+        [{"op":"replace_text","search":"旧","replace":"新"},
+         {"op":"append_paragraph","text":"结论"}]
+      </div>
+      <textarea id="office-ops" rows="5">[{"op":"append_paragraph","text":"由 Wasily 追加的段落"}]</textarea>
+      <div class="bar" style="margin-top:10px">
+        <button class="btn primary" id="btn-office-edit">执行编辑</button>
+        <button class="btn" id="btn-office-dry">预演</button>
+      </div>
+      <div class="meta" id="office-result"></div>
+    </div>
+  </section>
+
+  <!-- 视频 -->
+  <section id="pane-video" hidden>
+    <div class="panel">
+      <h3>播放器</h3>
+      <div class="meta" id="video-meta">尚未打开视频</div>
+      <video id="video" controls preload="metadata"></video>
+      <div class="bar" style="margin-top:10px">
+        <label class="hint">抽帧数量 <input id="frame-count" type="text" value="6" style="width:70px;flex:none"></label>
+        <button class="btn primary" id="btn-frames">抽取关键帧</button>
+      </div>
+      <div class="frames" id="frames"></div>
+    </div>
+  </section>
+
+  <!-- 代码 -->
+  <section id="pane-code" hidden>
+    <div class="panel">
+      <h3>编辑器</h3>
+      <div class="meta" id="code-meta">尚未打开文件</div>
+      <textarea id="code-view" rows="18" spellcheck="false"></textarea>
+      <div class="bar" style="margin-top:10px">
+        <button class="btn primary" id="btn-code-save">保存</button>
+        <input id="code-find" type="text" placeholder="查找" style="max-width:180px">
+        <input id="code-replace" type="text" placeholder="替换为" style="max-width:180px">
+        <button class="btn" id="btn-code-replace">替换全部</button>
+      </div>
+    </div>
+    <div class="panel">
+      <h3>代码搜索</h3>
+      <div class="bar">
+        <input id="code-q" type="text" placeholder="文件名或内容关键词">
+        <button class="btn" id="btn-code-search">搜索</button>
+      </div>
+      <div class="list" id="code-results"></div>
+    </div>
+  </section>
+
+  <!-- 浏览器 -->
+  <section id="pane-browser" hidden>
+    <div class="panel">
+      <h3>内置浏览器入口</h3>
+      <div class="bar">
+        <input id="url" type="text" placeholder="https://example.com" value="https://www.trae.cn">
+        <button class="btn primary" id="btn-go">访问</button>
+        <button class="btn" id="btn-external">外部打开</button>
+      </div>
+      <div class="hint">部分站点禁止被嵌入；受限时请用「外部打开」。此入口已为后续浏览器 MCP 协议预留。</div>
+      <iframe id="frame" src="about:blank" sandbox="allow-scripts allow-forms allow-same-origin"></iframe>
+    </div>
+  </section>
+</main>
+
+<div id="toast"></div>
+<script>
+(function(){
+  var state={tab:'office',path:'',code:{}};
+  function $(s){return document.querySelector(s)}
+  function toast(msg,err){var t=$('#toast');t.textContent=msg;t.className='show'+(err?' err':'');
+    clearTimeout(t._t);t._t=setTimeout(function(){t.className=''},2600)}
+  function api(url,opt){opt=opt||{};var init={method:opt.method||'GET',headers:{}};
+    if(opt.body!==undefined){init.headers['Content-Type']='application/json';init.body=JSON.stringify(opt.body)}
+    return fetch(url,init).then(function(r){return r.text().then(function(t){
+      var d={};try{d=t?JSON.parse(t):{}}catch(e){throw new Error('返回非 JSON')}
+      if(!r.ok)throw new Error(d.error||('请求失败 '+r.status));return d})})}
+  function setTab(name){
+    state.tab=name;
+    document.querySelectorAll('.tab').forEach(function(b){b.classList.toggle('active',b.getAttribute('data-tab')===name)});
+    ['office','video','code','browser'].forEach(function(k){$('#pane-'+k).hidden=(k!==name)});
+  }
+  document.querySelectorAll('.tab').forEach(function(b){b.onclick=function(){setTab(b.getAttribute('data-tab'))}});
+
+  function openFile(){
+    var p=$('#path').value.trim();
+    if(!p)return toast('请先输入文件路径',true);
+    state.path=p;
+    if(state.tab==='office')return loadOffice();
+    if(state.tab==='video')return loadVideo();
+    if(state.tab==='code')return loadCode();
+    if(/\.(mp4|mkv|avi|mov|webm|mp3|wav|flac|m4a)$/i.test(p))setTab('video'),loadVideo();
+    else if(/\.(docx|xlsx|pptx|pdf)$/i.test(p))setTab('office'),loadOffice();
+    else setTab('code'),loadCode();
+  }
+  $('#btn-open').onclick=openFile;
+  $('#path').addEventListener('keydown',function(e){if(e.key==='Enter')openFile()});
+
+  function loadOffice(){
+    $('#office-meta').textContent='读取中…';
+    api('/v1/apps/read?mode=office&path='+encodeURIComponent(state.path)).then(function(d){
+      $('#office-view').textContent=d.text||'（无可提取正文）';
+      $('#office-meta').textContent=d.path+' · '+d.format+' · '+(d.meta&&d.meta.elapsed_s||0)+'s';
+    }).catch(function(e){$('#office-meta').textContent='读取失败：'+e.message;toast(e.message,true)})
+  }
+  function runOffice(dry){
+    var ops;try{ops=JSON.parse($('#office-ops').value)}catch(e){return toast('操作 JSON 解析失败',true)}
+    $('#office-result').textContent='执行中…';
+    api('/v1/apps/edit',{method:'POST',body:{path:state.path,kind:'office',operations:ops,dry_run:dry}})
+      .then(function(d){$('#office-result').textContent=(d.dry_run?'预演完成，未写入':'已写入')+
+        ' · 备份：'+(d.backup||'无')+' · 操作数：'+(d.applied||[]).length;loadOffice();})
+      .catch(function(e){$('#office-result').textContent='失败：'+e.message;toast(e.message,true)})
+  }
+  $('#btn-office-edit').onclick=function(){runOffice(false)};
+  $('#btn-office-dry').onclick=function(){runOffice(true)};
+
+  function loadVideo(){
+    api('/v1/apps/read?mode=video&path='+encodeURIComponent(state.path)).then(function(d){
+      $('#video').src='/v1/apps/file?path='+encodeURIComponent(d.path);
+      var v=(d.streams||[]).find(function(s){return s.type==='video'})||{};
+      $('#video-meta').textContent=d.path+' · '+Math.round(d.duration||0)+'s · '+
+        (v.width||'?')+'x'+(v.height||'?')+' · '+(v.codec||'');
+    }).catch(function(e){$('#video-meta').textContent='读取失败：'+e.message;toast(e.message,true)})
+  }
+  $('#btn-frames').onclick=function(){
+    var n=parseInt($('#frame-count').value||'6',10)||6;
+    api('/v1/apps/video/frames',{method:'POST',body:{path:state.path,count:n,width:640}})
+      .then(function(d){
+        $('#frames').innerHTML=(d.frames||[]).map(function(f){
+          return '<figure><img src="/v1/apps/file?path='+encodeURIComponent(f.path)+'">'+
+            '<figcaption>'+f.at+'s</figcaption></figure>'}).join('');
+        toast('已抽取 '+d.count+' 帧');
+      }).catch(function(e){toast(e.message,true)})
+  };
+
+  function loadCode(){
+    api('/v1/apps/read?mode=code&path='+encodeURIComponent(state.path)).then(function(d){
+      state.code=d;
+      $('#code-view').value=d.text||'';
+      $('#code-meta').textContent=d.path+' · '+d.total_lines+' 行 · '+(d.language||'');
+    }).catch(function(e){$('#code-meta').textContent='读取失败：'+e.message;toast(e.message,true)})
+  }
+  $('#btn-code-save').onclick=function(){
+    api('/v1/apps/edit',{method:'POST',body:{path:state.path,
+      operations:[{op:'write',content:$('#code-view').value}]}})
+      .then(function(d){toast('已保存'+(d.backup?'，备份：'+d.backup:''))})
+      .catch(function(e){toast(e.message,true)})
+  };
+  $('#btn-code-replace').onclick=function(){
+    var a=$('#code-find').value,b=$('#code-replace').value;
+    if(!a)return toast('请输入查找内容',true);
+    api('/v1/apps/edit',{method:'POST',body:{path:state.path,
+      operations:[{op:'replace',search:a,replace:b}]}})
+      .then(function(d){toast('已替换 '+(d.applied[0]||{}).hits+' 处');loadCode()})
+      .catch(function(e){toast(e.message,true)})
+  };
+  $('#btn-code-search').onclick=function(){
+    var q=$('#code-q').value.trim();if(!q)return;
+    api('/v1/apps/search',{method:'POST',body:{query:q,limit:30}}).then(function(d){
+      $('#code-results').innerHTML=(d.results||[]).map(function(r){
+        return '<div class="item" data-path="'+encodeURIComponent(r.path)+'">'+r.name+
+          (r.line?(' · 第 '+r.line+' 行'):'')+'<br><span style="color:#8c95a8">'+
+          (r.snippet||r.path)+'</span></div>'}).join('')||'<div class="hint">没有结果</div>';
+      document.querySelectorAll('#code-results .item').forEach(function(el){
+        el.onclick=function(){
+          var p=decodeURIComponent(el.getAttribute('data-path'));
+          $('#path').value=p;setTab('code');state.path=p;loadCode();
+        }});
+    }).catch(function(e){toast(e.message,true)})
+  };
+
+  $('#btn-go').onclick=function(){
+    var u=$('#url').value.trim();if(!u)return;
+    if(!/^https?:\/\//i.test(u))u='https://'+u;
+    $('#frame').src=u;
+  };
+  $('#btn-external').onclick=function(){
+    var u=$('#url').value.trim();if(u)window.open(/^https?:\/\//i.test(u)?u:'https://'+u,'_blank');
+  };
+})();
+</script>
+</body>
+</html>

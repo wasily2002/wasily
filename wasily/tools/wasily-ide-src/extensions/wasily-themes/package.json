@@ -1,0 +1,34 @@
+{
+  "name": "wasily-themes",
+  "displayName": "wasily 主题",
+  "description": "wasily IDE 内置配色主题：暗色 / 深蓝 / 亮色 / 现代深色",
+  "publisher": "wasily",
+  "version": "1.0.0",
+  "engines": {
+    "vscode": "*"
+  },
+  "contributes": {
+    "themes": [
+      {
+        "label": "wasily 暗色",
+        "uiTheme": "vs-dark",
+        "path": "./themes/wasily-dark.json"
+      },
+      {
+        "label": "wasily 深蓝",
+        "uiTheme": "vs-dark",
+        "path": "./themes/wasily-blue.json"
+      },
+      {
+        "label": "wasily 亮色",
+        "uiTheme": "vs",
+        "path": "./themes/wasily-light.json"
+      },
+      {
+        "label": "wasily 现代深色",
+        "uiTheme": "vs-dark",
+        "path": "./themes/wasily-modern.json"
+      }
+    ]
+  }
+}

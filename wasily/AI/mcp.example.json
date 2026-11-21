@@ -1,0 +1,40 @@
+{
+  "_说明": "MCP 服务器配置示例。复制为 mcp.json 后按本机路径修改；真实配置已被 .gitignore 排除。transport=stdio 用 command/args/env；transport=http 用 url/headers。",
+  "mcpServers": {
+    "self": {
+      "transport": "stdio",
+      "command": "python",
+      "args": ["self_mcp_server.py"],
+      "cwd": ".",
+      "namespace": "",
+      "enabled": true
+    },
+    "filesystem": {
+      "transport": "stdio",
+      "command": "npx",
+      "args": ["-y", "@modelcontextprotocol/server-filesystem", "<WORKSPACE>"],
+      "namespace": "mcp__fs__",
+      "enabled": true
+    },
+    "playwright": {
+      "transport": "stdio",
+      "command": "npx",
+      "args": [
+        "-y", "@playwright/mcp@latest",
+        "--browser", "msedge",
+        "--user-data-dir", "<USER_DATA>/pw-profile",
+        "--output-dir", "<USER_DATA>/playwright-mcp"
+      ],
+      "namespace": "mcp__pw__",
+      "enabled": true,
+      "timeout": 90
+    },
+    "remote": {
+      "transport": "http",
+      "url": "http://127.0.0.1:9000/mcp",
+      "namespace": "mcp__remote__",
+      "enabled": true,
+      "timeout": 20
+    }
+  }
+}

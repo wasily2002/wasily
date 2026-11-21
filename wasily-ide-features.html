@@ -1,0 +1,858 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>wasily IDE — 功能全景与实现原理</title>
+<link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'%3E%3Crect width='32' height='32' rx='8' fill='%2316a34a'/%3E%3Ctext x='16' y='23' font-size='20' text-anchor='middle' fill='white' font-family='monospace'%3EW%3C/text%3E%3C/svg%3E">
+<script src="./three.min.js"></script>
+<style>
+:root{
+  --bg:#0b0d12; --bg2:#12141b; --card:#171a22; --line:#262a35;
+  --tx:#e8eaf0; --tx2:#9aa0ae; --tx3:#6b7280;
+  --ac:#4daafc; --ac2:#7c5cff; --ok:#3fb950; --warn:#e3b341; --err:#f47067;
+  --mono:"Cascadia Code","JetBrains Mono",Consolas,monospace;
+}
+*{margin:0;padding:0;box-sizing:border-box}
+html{scroll-behavior:smooth}
+body{background:var(--bg);color:var(--tx);font:15px/1.75 "Segoe UI","Microsoft YaHei",sans-serif;overflow-x:hidden}
+a{color:var(--ac);text-decoration:none}
+code,.mono{font-family:var(--mono);font-size:.88em;background:#1d212b;padding:2px 6px;border-radius:5px;color:#a5d6ff}
+
+/* ---------- 顶部导航 ---------- */
+nav{position:fixed;top:0;left:0;right:0;z-index:100;display:flex;align-items:center;flex-wrap:wrap;
+  gap:2px clamp(12px,1.8vw,26px);padding:8px clamp(14px,2.2vw,32px);min-height:56px;
+  background:rgba(11,13,18,.82);backdrop-filter:blur(14px);border-bottom:1px solid var(--line)}
+nav .logo{font-weight:700;font-size:17px;letter-spacing:.5px;background:linear-gradient(90deg,var(--ac),var(--ac2));-webkit-background-clip:text;background-clip:text;color:transparent;white-space:nowrap}
+nav a.nl{color:var(--tx2);font-size:13px;transition:color .15s;white-space:nowrap}
+nav a.nl:hover{color:var(--tx)}
+nav .sp{flex:1}
+nav .badge{font-size:11px;color:var(--ok);border:1px solid #1f3d2b;background:#12261a;padding:2px 10px;border-radius:99px}
+
+/* ---------- Hero ---------- */
+.hero{min-height:100vh;display:flex;flex-direction:column;justify-content:center;align-items:center;text-align:center;position:relative;overflow-x:clip;padding:100px 24px 60px}
+.hero .glow{position:absolute;width:900px;height:500px;border-radius:50%;filter:blur(120px);opacity:.16;pointer-events:none}
+.hero .g1{background:var(--ac);top:-100px;left:-150px}
+.hero .g2{background:var(--ac2);bottom:-80px;right:-120px}
+.hero h1{font-size:clamp(38px,6vw,68px);font-weight:800;letter-spacing:1px;line-height:1.2;
+  background:linear-gradient(100deg,#fff 20%,var(--ac) 55%,var(--ac2) 90%);-webkit-background-clip:text;background-clip:text;color:transparent}
+.hero p.sub{margin-top:20px;max-width:760px;color:var(--tx2);font-size:clamp(15px,2vw,18px)}
+.hero .cta{margin-top:36px;display:flex;gap:14px;flex-wrap:wrap;justify-content:center}
+.btn{display:inline-flex;align-items:center;gap:8px;padding:11px 26px;border-radius:10px;font-size:14px;font-weight:600;cursor:pointer;border:1px solid var(--line);background:var(--card);color:var(--tx);transition:.2s}
+.btn:hover{transform:translateY(-2px);border-color:#3a4152}
+.btn.pri{background:linear-gradient(90deg,var(--ac),var(--ac2));border:none;color:#fff}
+.stats{margin-top:56px;display:flex;gap:clamp(24px,5vw,72px);flex-wrap:wrap;justify-content:center}
+.stat b{display:block;font-size:30px;background:linear-gradient(90deg,var(--ac),var(--ac2));-webkit-background-clip:text;background-clip:text;color:transparent}
+.stat span{font-size:12.5px;color:var(--tx3)}
+
+/* ---------- 布局 ---------- */
+.wrap{max-width:1180px;margin:0 auto;padding:0 clamp(16px,3.4vw,28px)}
+section{padding:88px 0 30px;scroll-margin-top:72px}
+.sec-tag{font-size:12px;color:var(--ac);letter-spacing:2px;text-transform:uppercase;font-weight:600}
+.sec-title{font-size:clamp(26px,3.4vw,38px);font-weight:800;margin:8px 0 12px}
+.sec-desc{color:var(--tx2);max-width:760px;margin-bottom:36px}
+
+/* ---------- 功能卡片 ---------- */
+.grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(min(330px,100%),1fr));gap:18px}
+.card{background:var(--card);border:1px solid var(--line);border-radius:14px;padding:22px 22px 18px;transition:.22s;position:relative;overflow:hidden}
+.card:hover{transform:translateY(-4px);border-color:#3a4152;box-shadow:0 14px 40px rgba(0,0,0,.4)}
+.card h3{font-size:16px;display:flex;align-items:center;gap:9px;margin-bottom:6px}
+.card h3 .ico{width:26px;height:26px;border-radius:7px;display:grid;place-items:center;font-size:14px;flex-shrink:0;
+  background:linear-gradient(135deg,rgba(77,170,252,.18),rgba(124,92,255,.18));border:1px solid #2c3242}
+.card .cmd{font-family:var(--mono);font-size:11.5px;color:var(--tx3);margin-bottom:8px}
+.card p{font-size:13.5px;color:var(--tx2)}
+.card .how{margin-top:12px;padding-top:10px;border-top:1px dashed var(--line);font-size:12.5px;color:var(--tx3)}
+.card .how b{color:var(--tx2);font-weight:600}
+.tagrow{display:flex;gap:6px;flex-wrap:wrap;margin-top:10px}
+.tag{font-size:10.5px;padding:2px 8px;border-radius:99px;border:1px solid var(--line);color:var(--tx3)}
+.tag.b{border-color:#1f3d2b;color:var(--ok)}
+.tag.p{border-color:#33295c;color:#b3a1ff}
+
+/* ---------- 架构 ---------- */
+.arch{background:var(--bg2);border:1px solid var(--line);border-radius:18px;padding:clamp(18px,3vw,34px);overflow-x:auto}
+.flow{display:flex;align-items:stretch;gap:0;min-width:940px}
+.fnode{flex:1;background:var(--card);border:1px solid var(--line);border-radius:12px;padding:16px 18px;min-width:0}
+.fnode h4{font-size:14px;margin-bottom:4px;display:flex;align-items:center;gap:8px}
+.fnode h4 .dot{width:8px;height:8px;border-radius:50%;flex-shrink:0}
+.fnode p{font-size:12px;color:var(--tx3)}
+.fnode .port{font-family:var(--mono);font-size:11px;color:var(--ac);margin-top:6px}
+.farrow{display:flex;align-items:center;padding:0 10px;color:var(--tx3);font-size:20px;flex-shrink:0}
+.fdesc{margin-top:22px;display:grid;grid-template-columns:repeat(auto-fit,minmax(min(300px,100%),1fr));gap:14px}
+.fdesc .item{background:rgba(255,255,255,.02);border:1px solid var(--line);border-radius:10px;padding:14px 16px;font-size:13px;color:var(--tx2)}
+.fdesc .item b{color:var(--tx);display:block;margin-bottom:3px;font-size:13.5px}
+
+/* ---------- 3D 演示 ---------- */
+.stage3d{position:relative;height:clamp(430px,72vh,640px);border-radius:20px;overflow:hidden;border:1px solid var(--line);background:radial-gradient(ellipse at 50% 120%,#141826 0%,#0b0d12 65%)}
+#c3d{width:100%;height:100%;display:block}
+#c2d{position:absolute;inset:0;width:100%;height:100%;display:none}
+.hud{position:absolute;left:22px;top:20px;z-index:5;pointer-events:none}
+.hud .step{font-size:20px;font-weight:700}
+.hud .desc{font-size:13px;color:var(--tx2);margin-top:4px;max-width:420px}
+.hud .log{margin-top:12px;font-family:var(--mono);font-size:11.5px;color:var(--tx3);background:rgba(10,12,18,.72);border:1px solid var(--line);border-radius:10px;padding:10px 14px;min-width:340px;min-height:96px;pointer-events:none}
+.hud .log div{white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.hud .log .u{color:#a5d6ff}.hud .log .t{color:#b3a1ff}.hud .log .x{color:#7ee2a8}.hud .log .o{color:#e8eaf0}
+.ctrl3d{position:absolute;right:22px;top:20px;z-index:5;display:flex;gap:10px}
+.legend{position:absolute;left:22px;bottom:18px;z-index:5;display:flex;gap:16px;font-size:11.5px;color:var(--tx3)}
+.legend i{display:inline-block;width:9px;height:9px;border-radius:50%;margin-right:5px;vertical-align:-1px}
+.prog{position:absolute;left:0;right:0;bottom:0;height:3px;background:#1a1d26;z-index:5}
+.prog i{display:block;height:100%;width:0;background:linear-gradient(90deg,var(--ac),var(--ac2))}
+
+/* ---------- 数据流表 ---------- */
+table.dt{width:100%;border-collapse:collapse;font-size:13px;background:var(--card);border:1px solid var(--line);border-radius:14px;overflow:hidden}
+table.dt th{background:#1a1e28;text-align:left;padding:12px 16px;font-size:12px;color:var(--tx2);font-weight:600;letter-spacing:.5px}
+table.dt td{padding:11px 16px;border-top:1px solid var(--line);color:var(--tx2);vertical-align:top}
+table.dt td:first-child{font-family:var(--mono);font-size:12px;color:var(--ac);white-space:nowrap}
+table.dt tr:hover td{background:rgba(255,255,255,.02)}
+
+/* ---------- 页脚 ---------- */
+footer{margin-top:100px;border-top:1px solid var(--line);padding:36px 0;color:var(--tx3);font-size:12.5px;text-align:center}
+/* ---------- 响应式 ---------- */
+/* 中等宽度：四节点流程图改为纵向排列，消除容器内横向滚动 */
+@media(max-width:1100px){
+  .arch{overflow:visible}
+  .flow{flex-direction:column;min-width:0}
+  .fnode{padding:14px 16px}
+  .farrow{width:100%;height:26px;padding:0;justify-content:center;transform:rotate(90deg)}
+}
+/* 3D 演示区：HUD 长文案与右上角控制按钮会争抢空间，窄于 1120px 时改为跟随内容排布 */
+@media(max-width:1120px){
+  .stage3d{height:auto;display:flex;flex-direction:column}
+  #c3d{height:min(52vh,420px)}
+  #c2d{position:relative;inset:auto;height:min(52vh,420px)}
+  .hud{position:static;padding:16px 16px 0}
+  .hud .desc{max-width:none}
+  .hud .log{min-width:0;width:100%;margin-top:10px}
+  .ctrl3d{position:static;padding:14px 16px 4px;flex-wrap:wrap;gap:8px}
+  .ctrl3d .btn{padding:9px 14px;font-size:13px}
+  .legend{position:static;padding:10px 16px 18px;gap:10px 18px;flex-wrap:wrap}
+}
+/* 手机宽度：收紧留白，表格单元格自动换行 */
+@media(max-width:760px){
+  .hero{padding:150px 18px 56px}
+  .hero .glow{width:min(900px,130vw);height:min(500px,90vw)}
+  section{padding:64px 0 22px}
+  .sec-desc{margin-bottom:26px}
+  .card{padding:18px 18px 16px}
+  .card h3{font-size:15px}
+  .stats{margin-top:40px}
+  table.dt{font-size:12px;table-layout:fixed}
+  table.dt th,table.dt td{padding:9px 10px}
+  table.dt th:nth-child(1),table.dt td:nth-child(1){width:42%}
+  table.dt th:nth-child(2),table.dt td:nth-child(2){width:18%}
+  table.dt td{word-break:break-word}
+  table.dt td:first-child{white-space:normal;word-break:break-word;font-size:11px}
+  nav .badge{font-size:10px;padding:1px 8px}
+  footer{margin-top:64px;padding:28px 16px}
+}
+@media(max-width:480px){
+  nav{gap:2px 12px;padding:8px 12px}
+  nav .logo{font-size:15px}
+  nav a.nl{font-size:12px}
+  .hero .cta{width:100%;flex-direction:column;align-items:stretch}
+  .hero .cta .btn{justify-content:center}
+  .stat b{font-size:26px}
+  #c3d,#c2d{height:min(46vh,340px)}
+}
+</style>
+</head>
+<body>
+
+<nav>
+  <div class="logo">wasily IDE</div>
+  <a class="nl" href="#arch">架构原理</a>
+  <a class="nl" href="#demo3d">3D 过程演示</a>
+  <a class="nl" href="#edit">编辑能力</a>
+  <a class="nl" href="#auto">自动化</a>
+  <a class="nl" href="#mcp">MCP</a>
+  <a class="nl" href="#runtime">运行时内核</a>
+  <a class="nl" href="#link">IDE ↔ Agent 联动</a>
+  <a class="nl" href="#tools">工具与技能</a>
+  <div class="sp"></div>
+  <span class="badge" id="svcBadge">● 检测本地服务…</span>
+</nav>
+
+<!-- ================= HERO ================= -->
+<header class="hero">
+  <div class="glow g1"></div><div class="glow g2"></div>
+  <h1>会动手写代码的 AI 编辑器</h1>
+  <p class="sub">wasily IDE 把大模型深度嵌入编辑器内核：AI 不只聊天，还能打开你的文件、改代码、跑终端、修构建错误、画代码库拓扑，并通过 MCP 接入外部工具——与独立 Agent 端共享同一份会话与实时上下文。</p>
+  <div class="cta">
+    <a class="btn pri" href="#demo3d">▶ 观看 AI 工作过程 3D 演示</a>
+    <a class="btn" href="#arch">了解实现原理</a>
+  </div>
+  <div class="stats">
+    <div class="stat"><b>26</b><span>IDE 命令</span></div>
+    <div class="stat"><b>100</b><span>内置工具</span></div>
+    <div class="stat"><b>34</b><span>MCP 工具</span></div>
+    <div class="stat"><b>10</b><span>领域技能包</span></div>
+  </div>
+</header>
+
+<!-- ================= 架构原理 ================= -->
+<section id="arch"><div class="wrap">
+  <div class="sec-tag">Architecture</div>
+  <div class="sec-title">三层架构：编辑器插件 ⇄ 本地服务 ⇄ 大模型</div>
+  <p class="sec-desc">所有能力都建立在两条本地通道之上：插件内的 <b>IDE 桥（127.0.0.1:18753）</b> 让 AI 服务反向操控编辑器；<b>AI 服务（127.0.0.1:8000）</b> 统一托管会话、工具调度与模型流式输出。</p>
+  <div class="arch">
+    <div class="flow">
+      <div class="fnode"><h4><span class="dot" style="background:var(--ac)"></span>wasily IDE 插件</h4>
+        <p>ChatViewProvider 渲染对话面板 · 编辑器命令 · 诊断/选区采集</p><div class="port">extension.js</div></div>
+      <div class="farrow">⇄</div>
+      <div class="fnode"><h4><span class="dot" style="background:var(--ac2)"></span>IDE 桥 HTTP 服务</h4>
+        <p>/open_file /edit_file /run_terminal /context /command（白名单）</p><div class="port">127.0.0.1:18753</div></div>
+      <div class="farrow">⇄</div>
+      <div class="fnode"><h4><span class="dot" style="background:var(--ok)"></span>AI 服务 api_server</h4>
+        <p>会话存储 · 工具注册表调度 · 技能匹配 · IDE 上下文总线 · SSE 流</p><div class="port">127.0.0.1:8000</div></div>
+      <div class="farrow">⇄</div>
+      <div class="fnode"><h4><span class="dot" style="background:var(--warn)"></span>大模型 + MCP 工具层</h4>
+        <p>OpenAI 兼容 /v1/chat/completions 流式输出；本地 llama.cpp（qwen2.5-7b）或云端 API 可切换；MCP Server 工具以 mcp__ 前缀并入工具表</p><div class="port">local / API + stdio·HTTP</div></div>
+    </div>
+    <div class="fdesc">
+      <div class="item"><b>① 上下文注入</b>插件以 500ms 防抖把工作区根、当前文件/选区/行号/诊断上报到 <code>POST /v1/ide/context</code>；按 <code>windowId</code> 分窗口落盘并注入系统提示词——AI 既知道你在看哪段代码，也知道「这个项目」指的是哪个文件夹。</div>
+      <div class="item"><b>② 工具调用循环</b>模型输出 <code>```tool_call</code> 块 → 服务端解析并执行（100 个内置工具 + 34 个 MCP 工具）→ 结果回灌对话 → 直到模型给出最终回答；动作型请求零工具调用会被判定为「未完成」并如实告知。</div>
+      <div class="item"><b>③ 反向操控编辑器</b>工具里的 <code>ide_open / ide_edit / ide_terminal</code> 通过 18753 桥调用 VS Code API，实现"AI 自己动手"：开文件、跳行、改代码、跑命令。</div>
+      <div class="item"><b>④ 会话同源</b>IDE 会话统一命名 <code>ide:&lt;面板id&gt;</code>，与独立 Agent 页共用 <code>sessions_store/</code> 存储，任意一端都能无缝续聊、共享变更记录。</div>
+      <div class="item"><b>⑤ 项目根感知</b>登录请求时把该 windowId 最近一次上报的 <code>workspace</code> 设为项目根，并写入提示词「运行环境」；<code>file_list('.')</code> 等相对路径一律基于它解析，不会落到后端源码目录。</div>
+    </div>
+  </div>
+</div></section>
+
+<!-- ================= MCP ================= -->
+<section id="mcp"><div class="wrap">
+  <div class="sec-tag">Model Context Protocol</div>
+  <div class="sec-title">MCP：把外部能力接进同一个工具表</div>
+  <p class="sec-desc">配置在 <code>wasily/AI/mcp.json</code>，支持 <b>stdio</b> 与 <b>HTTP</b> 两种传输。连接成功后每个 server 的工具自动以 <code>mcp__&lt;server&gt;__</code> 前缀注册，与内置工具平级参与 tool_call 循环；只读工具直接执行，写类工具默认需要确认。</p>
+  <div class="grid">
+    <div class="card"><h3><span class="ico">🧩</span>self</h3><div class="cmd">stdio · python self_mcp_server.py</div>
+      <p>16 个工具：服务自省与状态查询，用于确认 AI 服务自身能力边界。</p>
+      <div class="tagrow"><span class="tag b">已连接</span><span class="tag">16 工具</span></div></div>
+    <div class="card"><h3><span class="ico">📂</span>filesystem</h3><div class="cmd">stdio · @modelcontextprotocol/server-filesystem</div>
+      <p>16 个工具：读文件、列目录、搜索、写文件、建目录、移动。授权目录限定为当前项目文件夹，越界路径直接拒绝。</p>
+      <div class="tagrow"><span class="tag b">已连接</span><span class="tag">16 工具</span><span class="tag p">写操作需确认</span></div></div>
+    <div class="card"><h3><span class="ico">🔁</span>echo</h3><div class="cmd">stdio · python mcp_echo_server.py</div>
+      <p>2 个工具的最小 MCP Server，真 JSON-RPC 往返，用来验证连接、握手与调用链路是否健康。</p>
+      <div class="tagrow"><span class="tag b">已连接</span><span class="tag">2 工具</span></div></div>
+    <div class="card"><h3><span class="ico">🌐</span>remote</h3><div class="cmd">http · 127.0.0.1:9000/mcp</div>
+      <p>HTTP/SSE 远程 server 示例，配置项已启用；目标端口当前无服务监听，因此显示未连接，填入真实 URL 与 Token 后重载即可。</p>
+      <div class="tagrow"><span class="tag" style="border-color:#5a3a1f;color:var(--warn)">未连接</span><span class="tag">HTTP</span></div></div>
+  </div>
+  <table class="dt" style="margin-top:22px">
+    <tr><th>接口</th><th>作用</th></tr>
+    <tr><td>GET /v1/mcp/servers</td><td>列出每个 server 的 transport / connected / 工具清单 / 错误原因</td></tr>
+    <tr><td>POST /v1/mcp/reload</td><td>热重载 mcp.json：新建连接、清理已删除 server 的旧工具名，无需重启服务</td></tr>
+    <tr><td>POST /v1/mcp/call</td><td>直接调用某个 server 的工具（server + tool + arguments），用于联调与验证</td></tr>
+  </table>
+</div></section>
+
+<!-- ================= 运行时内核 ================= -->
+<section id="runtime"><div class="wrap">
+  <div class="sec-tag">Runtime Kernel</div>
+  <div class="sec-title">运行时内核：三模式 · 多窗口 · 渲染引擎 · 通知</div>
+  <div class="grid">
+    <div class="card"><h3><span class="ico">🎚</span>Ask / Plan / Agent 三模式</h3><div class="cmd">请求体 mode = ask | plan | solo</div>
+      <p>Ask 纯问答、Plan 只给方案、Agent 自主执行。只读模式在服务端硬拦截写工具（不靠模型自觉），越权调用直接返回拒绝原因。</p>
+      <div class="how"><b>原理：</b>模式随每次请求下发，工具白名单在调度层按 mode 过滤；<code>ide_edit_file</code> / <code>ide_run_terminal</code> 同样纳入拦截。</div>
+      <div class="tagrow"><span class="tag b">服务端硬拦截</span><span class="tag">按请求下发</span></div></div>
+    <div class="card"><h3><span class="ico">🗜</span>上下文压缩 /compact</h3><div class="cmd">POST /v1/context/compact</div>
+      <p>把较早对话折叠成摘要块并落盘，保留最近若干轮，长任务不再撞上下文上限。输入框输入 <code>/compact</code> 即可触发。</p>
+      <div class="how"><b>原理：</b><code>context_net.compact(sid, messages, keep)</code> 生成折叠摘要，写回会话存储；返回压缩前后 token 统计。</div></div>
+    <div class="card"><h3><span class="ico">🗂</span>多窗口标签</h3><div class="cmd">windowId + 独立 sid</div>
+      <p>面板内每个标签是一个独立窗口：各自的会话、上下文、附件与任务状态互不覆盖，可以同时跑多个 Agent。</p>
+      <div class="how"><b>原理：</b>IDE 上下文按 <code>windowId</code> 分存 <code>ide_context.json</code>；运行态按 <code>session_id</code> 拆分，并发请求互不阻塞。</div>
+      <div class="tagrow"><span class="tag b">独立会话</span><span class="tag">并发</span></div></div>
+    <div class="card"><h3><span class="ico">🧱</span>内容渲染引擎</h3><div class="cmd">ide_panel.html</div>
+      <p>代码块带行号、超 20 行折叠、一键复制与语法高亮；终端块区分命令行与输出；文件树 / 文件预览卡片；提醒块与多步骤进度块；历史消息分段渲染，上滑增量补更早内容。</p>
+      <div class="how"><b>原理：</b>流式 token 先入队、50ms 批量渲染避免重排；同一轮连续同类工具结果合并为分组卡片，不给每条都开新卡。</div></div>
+    <div class="card"><h3><span class="ico">🔔</span>任务完成通知</h3><div class="cmd">notifyTask → /notify_stream → /notify_click</div>
+      <p>任务完成、需要确认或出错时弹系统通知；窗口最小化也弹，点击通知回到对应窗口与会话。同类事件做合并限流，避免轰炸。</p>
+      <div class="how"><b>原理：</b>扩展宿主向本地通知流注册客户端，服务端推送事件；点击经主进程恢复窗口后回传 <code>/notify_click</code>，按 sid 定位会话。</div></div>
+    <div class="card"><h3><span class="ico">#️⃣</span>上下文快捷添加</h3><div class="cmd">@ 与 / 与 #</div>
+      <p>输入 <code>@</code> 选文件、<code>/</code> 选命令与技能、<code>#</code> 精确加入 <code>#Code</code> <code>#File</code> <code>#Folder</code> <code>#Workspace</code> <code>#Web</code> <code>#Past Chats</code>；也可从资源管理器拖文件进对话框。</p>
+      <div class="how"><b>原理：</b>选择器把路径/选区/网页内容转成结构化附件随消息发送，服务端统一拼进上下文，不靠模型猜。</div></div>
+  </div>
+</div></section>
+
+<!-- ================= 3D 演示 ================= -->
+<section id="demo3d"><div class="wrap">
+  <div class="sec-tag">Live Demo</div>
+  <div class="sec-title">AI 对话 · 思考 · 执行 —— 三维全过程演示</div>
+  <p class="sec-desc">一次真实请求在 wasily IDE 内部的旅行：你的问题连同「当前项目文件夹 + 光标/选区/诊断」进入对话面板，在思考云里匹配技能与上下文，随后沿管道点亮工具节点——列目录、读文件、经 MCP filesystem 取内容、必要时打开系统浏览器，最后流式汇成回答。可拖拽旋转视角。</p>
+  <div class="stage3d">
+    <canvas id="c3d"></canvas>
+    <canvas id="c2d"></canvas>
+    <div class="hud">
+      <div class="step" id="hudStep">准备就绪</div>
+      <div class="desc" id="hudDesc">点击「开始演示」观看一轮完整的 AI 请求处理流程</div>
+      <div class="log" id="hudLog"></div>
+    </div>
+    <div class="ctrl3d">
+      <button class="btn pri" id="btnPlay">▶ 开始演示</button>
+      <button class="btn" id="btnMode">模式：3D 场景</button>
+      <button class="btn" id="btnFollow">跟随光点：关</button>
+      <button class="btn" id="btnCam">环绕视角：开</button>
+    </div>
+    <div class="legend">
+      <span><i style="background:#4daafc"></i>用户输入</span>
+      <span><i style="background:#b3a1ff"></i>模型思考</span>
+      <span><i style="background:#e3b341"></i>内置工具</span>
+      <span><i style="background:#7ee2a8"></i>MCP 工具</span>
+      <span><i style="background:#3fb950"></i>回答输出</span>
+    </div>
+    <div class="prog"><i id="progBar"></i></div>
+  </div>
+</div></section>
+
+<!-- ================= 编辑能力 ================= -->
+<section id="edit"><div class="wrap">
+  <div class="sec-tag">Editor Superpowers</div>
+  <div class="sec-title">编辑器内的 AI 超能力（全部可直接使用）</div>
+  <p class="sec-desc">以下每个命令都已在命令面板 / 右键菜单 / 编辑器标题栏注册，选中代码即可用，非演示桩。</p>
+  <div class="grid">
+    <div class="card"><h3><span class="ico">💬</span>AI 对话面板</h3><div class="cmd">wasily-ai.openPanel</div>
+      <p>侧边/中央双形态对话面板，多会话管理、流式输出、Markdown 渲染、工具执行事件实时上屏、文件变更卡片（可审阅/接受/回滚）。</p>
+      <div class="how"><b>原理：</b>Webview 加载 <code>/panel_ui</code>，通过 <code>postMessage</code> 与扩展宿主通信；SSE 逐 token 推送，会话持久化于 workspaceState + 服务端 sessions_store 双写。</div>
+      <div class="tagrow"><span class="tag b">流式</span><span class="tag b">多会话</span><span class="tag">IDE 联动</span></div></div>
+    <div class="card"><h3><span class="ico">🔍</span>解释选中代码</h3><div class="cmd">wasily-ai.explainSelection</div>
+      <p>选中任意代码片段，AI 结合文件语言、上下文与项目结构逐行讲解。</p>
+      <div class="how"><b>原理：</b>插件采集 selection + 语言 ID + 文件路径，经 <code>/v1/chat/completions</code> 发送；服务端命中 <code>code_edit</code> 技能并注入 IDE 上下文。</div></div>
+    <div class="card"><h3><span class="ico">✏️</span>修改当前文件</h3><div class="cmd">wasily-ai.editCurrentFile</div>
+      <p>AI 直接改写当前文件，先出 diff 预览，确认后才落盘——改错了一键回滚。</p>
+      <div class="how"><b>原理：</b>生成结果经差异比对后以编辑卡片呈现；应用走 <code>ide_edit</code> → 18753 桥 <code>/edit_file</code> → WorkspaceEdit，全程保留撤销栈。</div>
+      <div class="tagrow"><span class="tag b">diff 确认</span><span class="tag p">可回滚</span></div></div>
+    <div class="card"><h3><span class="ico">📥</span>光标处生成代码</h3><div class="cmd">wasily-ai.insertAtCursor</div>
+      <p>说一句话，代码直接出现在光标位置，自动匹配缩进与语言风格。</p>
+      <div class="how"><b>原理：</b>把光标前后若干行作为上下文发送，返回片段经 <code>TextEditor.edit</code> 插入并触发格式化。</div></div>
+    <div class="card"><h3><span class="ico">📝</span>自动加注释</h3><div class="cmd">wasily-ai.addComments</div>
+      <p>为选中函数/类生成规范注释（docstring/JSDoc），不改变任何逻辑。</p>
+      <div class="how"><b>原理：</b>技能约束"仅新增注释行"，返回整段替换文本，经 diff 确认后应用。</div></div>
+    <div class="card"><h3><span class="ico">🐞</span>修复 Bug</h3><div class="cmd">wasily-ai.fixBug</div>
+      <p>选中可疑代码，AI 定位缺陷并给出修复 diff；结合诊断信息可精确到行。</p>
+      <div class="how"><b>原理：</b>诊断（错误/警告）随 IDE 上下文自动上报，模型在提示词中直接看到 <code>错误 L10: xxx</code>，修复建议有据可依。</div></div>
+    <div class="card"><h3><span class="ico">🧪</span>生成测试</h3><div class="cmd">wasily-ai.genTests</div>
+      <p>为选中代码生成单元测试（pytest/Jest…），新建成测试文件落盘。</p>
+      <div class="how"><b>原理：</b>模型产出测试代码 → <code>file_write</code> 写入同目录测试文件 → 可接续调用 <code>run_python / npm_runner</code> 立即跑一遍验证。</div></div>
+    <div class="card"><h3><span class="ico">⚡</span>AI Quick Fix</h3><div class="cmd">wasily.quickfix</div>
+      <p>一键修复当前文件 Problems 面板里的所有报错：AI 读取诊断 → 生成修复 → diff 确认。</p>
+      <div class="how"><b>原理：</b><code>vscode.languages.getDiagnostics</code> 全量采集 → 按严重度排序注入提示词 → 批量修复建议，与手动修 Bug 共用 diff 管线。</div></div>
+    <div class="card"><h3><span class="ico">🔨</span>Build 自动修复</h3><div class="cmd">wasily.buildFix</div>
+      <p>自动运行构建命令，把编译错误喂给 AI 循环修复，直到构建通过或达到轮次上限。</p>
+      <div class="how"><b>原理：</b>18753 桥 <code>/run_terminal</code> 在 IDE 集成终端真实执行构建 → 采集输出 → 解析错误 → <code>ide_edit</code> 修复 → 重新构建，闭环迭代。</div>
+      <div class="tagrow"><span class="tag b">闭环迭代</span><span class="tag p">真实终端</span></div></div>
+    <div class="card"><h3><span class="ico">🗺</span>Codebase Graph</h3><div class="cmd">wasily.showGraph</div>
+      <p>代码库拓扑可视化：文件/模块依赖关系一张图看清，点击节点直达文件。</p>
+      <div class="how"><b>原理：</b>扫描工作区 import/引用关系构建有向图，Webview 内力图布局渲染，节点点击经桥接调 <code>/open_file</code>。</div></div>
+    <div class="card"><h3><span class="ico">🤖</span>AI 自检（审阅员）</h3><div class="cmd">wasily-ai.selfCheck</div>
+      <p>让第二个"审阅员"角色复核上一条 AI 回答，揪出错误与遗漏后再呈现。</p>
+      <div class="how"><b>原理：</b>上一条回答 + 原始问题打包进审阅提示词二次推理，结果以批注形式附在原回答下方。</div></div>
+    <div class="card"><h3><span class="ico">🖥</span>AI Terminal</h3><div class="cmd">wasily.aiTerminal</div>
+      <p>终端里直接对话：说"把 8000 端口的进程杀了"，AI 转成命令并在终端执行。</p>
+      <div class="how"><b>原理：</b>自然语言 → 命令生成 → 经桥接写入集成终端 PTY，输出回读给模型判断下一步。</div></div>
+  </div>
+</div></section>
+
+<!-- ================= 自动化 ================= -->
+<section id="auto"><div class="wrap">
+  <div class="sec-tag">Automation</div>
+  <div class="sec-title">围绕编辑器的自动化中枢</div>
+  <div class="grid">
+    <div class="card"><h3><span class="ico">🌐</span>应用预览</h3><div class="cmd">wasily-ai.preview</div>
+      <p>中央编辑区内嵌 Simple Browser 预览 wasily 应用，改完代码即刻看效果。</p>
+      <div class="how"><b>原理：</b>Webview 面板加载本地 8000 端口页面；配合 <code>python_server / php_server</code> 工具可一键起站再预览。</div></div>
+    <div class="card"><h3><span class="ico">🔌</span>端口自动转发</h3><div class="cmd">wasily-ai.togglePorts / showPorts</div>
+      <p>检测到终端输出的本地端口自动转发并提示，底部面板统一管理。</p>
+      <div class="how"><b>原理：</b>监听终端输出正则匹配 <code>localhost:\d+</code>，注册到 IDE 端口转发视图，点击直接打开预览。</div></div>
+    <div class="card"><h3><span class="ico">🧾</span>本地变更（SCM）</h3><div class="cmd">wasily-ai.openScm</div>
+      <p>AI 改过的所有文件集中出现在源代码管理视图，逐文件 diff、接受或丢弃。</p>
+      <div class="how"><b>原理：</b>服务端把工具产生的文件写入按会话记入变更流 <code>/changes</code>，面板轮询渲染变更卡片，与 SCM 视图双向同步。</div></div>
+    <div class="card"><h3><span class="ico">👥</span>多 AI 圆桌</h3><div class="cmd">wasily-ai.openGroup</div>
+      <p>多个模型/角色围一桌讨论同一个问题，观点互评后汇总结论。</p>
+      <div class="how"><b>原理：</b>同一提示词分发给多个角色配置并行流式生成，再由"主持人"提示词做交叉评审与收敛。</div></div>
+    <div class="card"><h3><span class="ico">🏠</span>Agent 中心</h3><div class="cmd">wasily-ai.openAgent</div>
+      <p>插件 / 技能 / MCP / IDE 能力 / 自动化 / 权限 / 产物库的统一管理面板。</p>
+      <div class="how"><b>原理：</b>中央 Webview 加载 <code>/agent</code>，直连服务端 REST：<code>/v1/ide/models</code>、<code>/v1/agent/sessions</code>、产物库等，与对话页数据同源。</div></div>
+    <div class="card"><h3><span class="ico">⬆️</span>检查更新</h3><div class="cmd">wasily-ai.checkForUpdates</div>
+      <p>含网络诊断与镜像加速的一键更新， changelog 面板展示版本历史。</p>
+      <div class="how"><b>原理：</b>多镜像源并发测速选优，下载校验后热替换资源，<code>openChangelog</code> 渲染版本时间线。</div></div>
+  </div>
+</div></section>
+
+<!-- ================= IDE ↔ Agent 联动 ================= -->
+<section id="link"><div class="wrap">
+  <div class="sec-tag">IDE ↔ Agent Link</div>
+  <div class="sec-title">IDE 与独立 Agent：同一个大脑</div>
+  <p class="sec-desc">最新打通的联动层：编辑器里发生的一切，独立 Agent 对话页（/chat）与 Agent 中心（/agent）实时可见、可续聊、可反向操作。</p>
+  <table class="dt">
+    <tr><th>接口 / 通道</th><th>方向</th><th>作用与实现</th></tr>
+    <tr><td>POST /v1/ide/context</td><td>IDE → 服务</td><td>插件 500ms 防抖上报工作区、当前文件、语言、选区(≤4000字)、光标行、已打开文件(≤10)、诊断(≤10条)；按 <code>windowId</code> 分存 <code>ide_context.json</code> 并注入系统提示词（含「用户当前项目文件夹」）</td></tr>
+    <tr><td>GET /v1/ide/context</td><td>服务 → 任意端</td><td>返回快照 + online(&lt;90s) / fresh(&lt;10min) 新鲜度标记，供 /chat 页头与 Agent 中心轮询；生成回复时只要该窗口上报过就采用其 workspace 作为项目根</td></tr>
+    <tr><td>POST /v1/context/compact</td><td>面板 → 服务</td><td>对话压缩：把较早消息折叠为摘要块并保留最近若干轮，返回压缩前后 token 数；输入框 <code>/compact</code> 触发，长任务不再撞上下文上限</td></tr>
+    <tr><td>GET 18753/context</td><td>IDE → 页面直连</td><td>桥内实时采集（不走服务端落盘），/chat 与 /agent 优先直连读它，延迟最低</td></tr>
+    <tr><td>GET /v1/agent/sessions</td><td>服务 → 页面</td><td>扫描 sessions_store 统一列出 IDE 会话（ide: 前缀）与 Web 会话，标题自动剥除上下文横幅还原用户原话</td></tr>
+    <tr><td>GET /v1/agent/session?id=</td><td>服务 → 页面</td><td>读取单会话全部消息，过滤工具执行噪声（```tool_call 块、工具结果回灌），跨端续聊时展示干净对话</td></tr>
+    <tr><td>POST 18753/open_file</td><td>页面 → IDE</td><td>/chat 页头文件标签、Agent 中心「打开当前文件」一键在编辑器中定位到对应文件与行号</td></tr>
+    <tr><td>POST 18753/command</td><td>页面 → IDE</td><td>命令白名单（openPanel/openAgent/addToChat/reloadWindow…），网页端可唤出 IDE 对话面板</td></tr>
+    <tr><td>?session=ide:&lt;id&gt;</td><td>IDE → /chat</td><td>面板菜单「Agent 对话」把当前会话带到独立 Agent 页继续；文件变更卡片按同一 sid 归属，不错乱</td></tr>
+  </table>
+</div></section>
+
+<!-- ================= 工具与技能 ================= -->
+<section id="tools"><div class="wrap">
+  <div class="sec-tag">Tools & Skills</div>
+  <div class="sec-title">100 个内置工具 + 34 个 MCP 工具 × 10 技能包</div>
+  <div class="grid">
+    <div class="card"><h3><span class="ico">📂</span>文件与产物</h3>
+      <p>file_read / file_write / file_list / file_copy / file_move / file_delete / file_search / file_zip / save_output</p>
+      <div class="how"><b>原理：</b>统一注册进 <code>tools.py</code> 工具表，模型以 tool_call 块调用，产物经 <code>save_output</code> 汇入 Agent 中心「我的产物」。</div></div>
+    <div class="card"><h3><span class="ico">🖱</span>桌面操控</h3>
+      <p>mouse_* / key_* / screenshot / clipboard_* / window_* / process_* / open_app</p>
+      <div class="how"><b>原理：</b>基于 pyautogui / pygetwindow 的系统级自动化，AI 可操作任意桌面软件，截图回传实现视觉闭环。</div></div>
+    <div class="card"><h3><span class="ico">🌍</span>网络与服务</h3>
+      <p>network_request / network_download / network_ping / python_server / php_server / npm_runner / web_snap / fetch_web / <b>open_homepage</b> / resolve_homepage</p>
+      <div class="how"><b>原理：</b>HTTP 客户端 + 本地服务托管；<code>open_homepage</code> 只读解析默认浏览器后调用系统 <code>start</code> 打开（返回 <code>opened</code> 供模型核验），不会编造网址。</div></div>
+    <div class="card"><h3><span class="ico">🧠</span>记忆与进化</h3>
+      <p>memory_save / memory_list / memory_forget / mem_recall / train_start / lora_manage</p>
+      <div class="how"><b>原理：</b>L1 会话摘要 / L2 长期事实 / L3 核心认知三层记忆网；自我训练双角色互评，高分知识自动写回记忆，LoRA 适配器可导出挂载。</div></div>
+    <div class="card"><h3><span class="ico">📋</span>任务续跑</h3>
+      <p>task_save / task_list / task_update / task_close / task_resume / todo_list</p>
+      <div class="how"><b>原理：</b>任务跨会话持久化，中断后 <code>task_resume</code> 恢复完整上下文推荐续跑优先级，长任务不丢进度。</div></div>
+    <div class="card"><h3><span class="ico">🏠</span>系统与设备</h3>
+      <p>system_info / env_* / registry_* / service_* / device_scan / device_control / sys_clean / wallpaper</p>
+      <div class="how"><b>原理：</b>WMI/注册表/服务控制 + SSDP/ARP 局域网发现，从清理系统到控制智能设备一句话完成。</div></div>
+  </div>
+  <p class="sec-desc" style="margin-top:26px">技能包（<code>skills/*.md</code>）：<code>code_edit</code> 代码改写 · <code>webdev</code> 建站 · <code>python_dev</code> · <code>browser_op</code> 浏览器操作 · <code>docwrite</code> 文档写作 · <code>file_organize</code> 文件整理 · <code>ide_integration</code> IDE 协作 · <code>sys_service</code> 系统服务 · <code>task_resume</code> 任务续跑 · <code>ai_video</code> 视频生成 —— 按用户提问语义自动匹配注入，给模型装上"领域手册"。</p>
+</div></section>
+
+<footer>
+  wasily IDE · 本地优先的 AI 编程环境 · 数据保存在本机；模型可走本地 llama.cpp 或自配云端 API，MCP 工具按需接入
+</footer>
+
+<script>
+/* ================================================================
+   3D 演示：AI 请求之旅（Three.js）
+   场景：用户输入(蓝球) → 对话泡 → 思考云(紫粒子+记忆/技能节点)
+        → 工具管道(黄=内置、青绿=MCP) → 回答(绿) → 回到用户
+   ================================================================ */
+(function(){
+const canvas = document.getElementById('c3d');
+const renderer = new THREE.WebGLRenderer({canvas, antialias:true, alpha:true});
+const scene = new THREE.Scene();
+scene.fog = new THREE.FogExp2(0x0b0d12, 0.028);
+const camera = new THREE.PerspectiveCamera(50, 2, 0.1, 200);
+camera.position.set(0, 6, 22);
+
+scene.add(new THREE.AmbientLight(0x8899bb, 0.7));
+const key = new THREE.PointLight(0x4daafc, 60, 80); key.position.set(-8, 10, 10); scene.add(key);
+const fill = new THREE.PointLight(0x7c5cff, 50, 80); fill.position.set(10, 4, -6); scene.add(fill);
+
+/* --- 地面网格 --- */
+const grid = new THREE.GridHelper(60, 40, 0x232838, 0x181c26);
+grid.position.y = -4; scene.add(grid);
+
+/* --- 节点构建工具 --- */
+function glowSphere(color, r){
+  const g = new THREE.Group();
+  const core = new THREE.Mesh(new THREE.SphereGeometry(r, 32, 32),
+    new THREE.MeshStandardMaterial({color, emissive:color, emissiveIntensity:.55, roughness:.3}));
+  const halo = new THREE.Mesh(new THREE.SphereGeometry(r*1.7, 24, 24),
+    new THREE.MeshBasicMaterial({color, transparent:true, opacity:.12}));
+  g.add(core, halo); g.userData.core = core; g.userData.halo = halo;
+  return g;
+}
+function label(text, color){
+  const c = document.createElement('canvas'); c.width = 512; c.height = 128;
+  const x = c.getContext('2d');
+  x.font = 'bold 56px "Microsoft YaHei", sans-serif';
+  x.textAlign = 'center'; x.textBaseline = 'middle';
+  x.shadowColor = color; x.shadowBlur = 24; x.fillStyle = '#eef1f7';
+  x.fillText(text, 256, 64);
+  const sp = new THREE.Sprite(new THREE.SpriteMaterial({map:new THREE.CanvasTexture(c), transparent:true, depthWrite:false}));
+  sp.scale.set(6.4, 1.6, 1); return sp;
+}
+function ring(color, R){
+  return new THREE.Mesh(new THREE.TorusGeometry(R, .05, 12, 80),
+    new THREE.MeshBasicMaterial({color, transparent:true, opacity:.5}));
+}
+/* position/scale 是只读引用，必须用 .set() 修改 */
+function tag(text, color, x, y, sx, sy){
+  const sp = label(text, color);
+  sp.position.set(0, y, 0);
+  if(sx) sp.scale.set(sx, sy, 1);
+  return sp;
+}
+
+/* --- 五个站点 --- */
+const ST = {
+  user:  {pos:new THREE.Vector3(-13, 0, 6),  color:0x4daafc, name:'用户 / 编辑器'},
+  chat:  {pos:new THREE.Vector3(-6, 1.5, -3),color:0x4daafc, name:'对话面板'},
+  think: {pos:new THREE.Vector3(1, 3, 0),   color:0x7c5cff, name:'思考云 · 技能+上下文'},
+  tools: {pos:new THREE.Vector3(8, 0, -3),  color:0xe3b341, name:'内置 + MCP 工具层'},
+  answer:{pos:new THREE.Vector3(2, -0.5, 7),color:0x3fb950, name:'回答输出'}
+};
+const nodes = {};
+Object.entries(ST).forEach(([k,v])=>{
+  const n = glowSphere(v.color, k==='think'?1.15:.85);
+  n.position.copy(v.pos);
+  n.add(tag(v.name, '#'+v.color.toString(16), 0, 2.1));
+  const rg = ring(v.color, 1.6); rg.rotation.x = Math.PI/2; rg.position.y = -1.1; n.add(rg);
+  n.userData.ring = rg; scene.add(n); nodes[k] = n;
+});
+
+/* 思考云粒子 */
+const thinkPts = (()=> {
+  const N = 500, pos = new Float32Array(N*3);
+  for(let i=0;i<N;i++){
+    const r = 2.2 + Math.random()*2.6, th = Math.random()*Math.PI*2, ph = Math.acos(2*Math.random()-1);
+    pos[i*3]=r*Math.sin(ph)*Math.cos(th); pos[i*3+1]=r*Math.cos(ph)*.7; pos[i*3+2]=r*Math.sin(ph)*Math.sin(th);
+  }
+  const g = new THREE.BufferGeometry(); g.setAttribute('position', new THREE.BufferAttribute(pos,3));
+  const p = new THREE.Points(g, new THREE.PointsMaterial({color:0x9d86ff, size:.09, transparent:true, opacity:.55}));
+  p.position.copy(ST.think.pos); scene.add(p); return p;
+})();
+
+/* 记忆 / 技能 卫星节点 */
+const sats = [];
+[['记忆 L1·L2·L3',0x4daafc],['技能×10',0x3fb950],['IDE 上下文',0xe3b341]].forEach(([t,c],i)=>{
+  const s = glowSphere(c, .32);
+  s.add(tag(t, '#'+c.toString(16), 0, .85, 3.6, .9));
+  s.userData.angle = i/3*Math.PI*2; scene.add(s); sats.push(s);
+});
+
+/* 工具子节点 */
+const toolNodes = [];
+[['file_list 列目录',0xe3b341],['mcp__fs__read_text_file',0x7ee2a8],['open_homepage 开网页',0x3fb950]].forEach(([t,c],i)=>{
+  const s = glowSphere(c, .42);
+  const a = (i-1)*1.15;
+  s.position.set(ST.tools.pos.x + Math.sin(a)*2.6, ST.tools.pos.y + 1.6 + i*1.1, ST.tools.pos.z + Math.cos(a)*2.2);
+  s.add(tag(t, '#'+c.toString(16), 0, 1, 6.2, 1.2));
+  scene.add(s); toolNodes.push(s);
+});
+
+/* --- 管道（站点间连线） --- */
+const pipes = [];
+function pipe(a, b){
+  const mid = a.clone().lerp(b,.5); mid.y += 2.5;
+  const curve = new THREE.QuadraticBezierCurve3(a, mid, b);
+  const geo = new THREE.TubeGeometry(curve, 40, .045, 8, false);
+  const mesh = new THREE.Mesh(geo, new THREE.MeshBasicMaterial({color:0x3a4152, transparent:true, opacity:.55}));
+  scene.add(mesh); pipes.push({curve, mesh});
+  return curve;
+}
+const cU2C = pipe(ST.user.pos, ST.chat.pos);
+const cC2T = pipe(ST.chat.pos, ST.think.pos);
+const cT2X = pipe(ST.think.pos, ST.tools.pos);
+const cX2A = pipe(ST.tools.pos, ST.answer.pos);
+const cA2U = pipe(ST.answer.pos, ST.user.pos);
+
+/* --- 旅行者光点 --- */
+function traveler(color){
+  const t = glowSphere(color, .3); scene.add(t); return t;
+}
+const sparks = [];
+function spawnSpark(curve, color, dur, done){
+  sparks.push({m:traveler(color), curve, t:0, dur, done});
+}
+
+/* --- 背景星尘 --- */
+(()=>{ const N=700, pos=new Float32Array(N*3);
+  for(let i=0;i<N;i++){ pos[i*3]=(Math.random()-.5)*90; pos[i*3+1]=(Math.random()-.5)*50+6; pos[i*3+2]=(Math.random()-.5)*90; }
+  const g=new THREE.BufferGeometry(); g.setAttribute('position',new THREE.BufferAttribute(pos,3));
+  scene.add(new THREE.Points(g,new THREE.PointsMaterial({color:0x39415a,size:.07})));
+})();
+
+/* --- 交互：拖拽旋转 --- */
+let dragging=false, px=0, py=0, rx=0, ry=0, autoCam=true;
+canvas.addEventListener('pointerdown', e=>{dragging=true;px=e.clientX;py=e.clientY;});
+window.addEventListener('pointerup', ()=>dragging=false);
+window.addEventListener('pointermove', e=>{
+  if(!dragging) return;
+  ry += (e.clientX-px)*.005; rx += (e.clientY-py)*.004;
+  rx = Math.max(-.4, Math.min(.9, rx)); px=e.clientX; py=e.clientY;
+});
+document.getElementById('btnCam').onclick = function(){
+  autoCam = !autoCam; this.textContent = '环绕视角：' + (autoCam?'开':'关');
+};
+
+/* ============ 第二种演示方式：2D 时序图 ============ */
+const c2d = document.getElementById('c2d');
+const x2 = c2d.getContext('2d');
+let mode2d = false, followCam = false;
+const ACTORS = [['用户 / 编辑器','#4daafc'],['对话面板','#4daafc'],['思考云','#7c5cff'],['工具执行层','#e3b341'],['回答输出','#3fb950']];
+const seqMsgs = [];   // {a,b,text,c,active,t}
+
+document.getElementById('btnMode').onclick = function(){
+  mode2d = !mode2d;
+  canvas.style.display = mode2d ? 'none' : 'block';
+  c2d.style.display = mode2d ? 'block' : 'none';
+  this.textContent = '模式：' + (mode2d ? '2D 时序图' : '3D 场景');
+  if (mode2d) drawSeq();
+};
+document.getElementById('btnFollow').onclick = function(){
+  followCam = !followCam; this.textContent = '跟随光点：' + (followCam?'开':'关');
+};
+
+function rr(x, a, b, w, h, r){
+  x.beginPath();
+  x.moveTo(a+r,b); x.arcTo(a+w,b,a+w,b+h,r); x.arcTo(a+w,b+h,a,b+h,r);
+  x.arcTo(a,b+h,a,b,r); x.arcTo(a,b,a+w,b,r); x.closePath();
+}
+function arrowHead(x, px, py, ang, color){
+  x.save(); x.translate(px,py); x.rotate(ang);
+  x.beginPath(); x.moveTo(0,0); x.lineTo(-9,-5); x.lineTo(-9,5); x.closePath();
+  x.fillStyle = color; x.fill(); x.restore();
+}
+function drawSeq(){
+  const w = c2d.clientWidth, h = c2d.clientHeight;
+  if (!w) return;
+  const dpr = window.devicePixelRatio || 1;
+  if (c2d.width !== w*dpr){ c2d.width = w*dpr; c2d.height = h*dpr; }
+  x2.setTransform(dpr,0,0,dpr,0,0);
+  x2.clearRect(0,0,w,h);
+  const cols = [0.08,0.28,0.47,0.67,0.88].map(p=>p*w);
+  const top = 96, boxW = 118;
+  x2.textAlign = 'center'; x2.textBaseline = 'middle';
+  ACTORS.forEach(([nm,c],i)=>{
+    x2.strokeStyle = c; x2.lineWidth = 1.4; x2.fillStyle = 'rgba(23,26,34,.92)';
+    rr(x2, cols[i]-boxW/2, 30, boxW, 36, 9); x2.fill(); x2.stroke();
+    x2.fillStyle = '#eef1f7'; x2.font = '600 13px "Microsoft YaHei"';
+    x2.fillText(nm, cols[i], 48);
+    x2.strokeStyle = '#2a2f3c'; x2.setLineDash([4,5]); x2.lineWidth = 1;
+    x2.beginPath(); x2.moveTo(cols[i], 66); x2.lineTo(cols[i], h-26); x2.stroke(); x2.setLineDash([]);
+  });
+  seqMsgs.forEach((m)=>{
+    const y = top + m.idx*56;
+    const xa = cols[m.a], xb = cols[m.b];
+    x2.strokeStyle = m.c; x2.fillStyle = m.c; x2.lineWidth = 1.6;
+    if (m.a === m.b){
+      // 自循环（思考云内部推理 / 工具层内部多次调用）
+      x2.beginPath(); x2.moveTo(xa, y); x2.lineTo(xa+34, y); x2.lineTo(xa+34, y+16); x2.lineTo(xa+5, y+16); x2.stroke();
+      arrowHead(x2, xa+5, y+16, Math.PI, m.c);
+      x2.fillStyle = '#c9cdd4'; x2.font = '12px "Microsoft YaHei"'; x2.textAlign = 'left';
+      x2.fillText(m.text, xa+44, y+8); x2.textAlign = 'center';
+      if (m.active){
+        x2.beginPath(); x2.arc(xa+34, y+8, 5, 0, 7);
+        x2.shadowColor = m.c; x2.shadowBlur = 14; x2.fillStyle = m.c; x2.fill(); x2.shadowBlur = 0;
+      }
+    } else {
+      const dir = xb > xa ? 0 : Math.PI;
+      x2.beginPath(); x2.moveTo(xa, y); x2.lineTo(xb, y); x2.stroke();
+      arrowHead(x2, xb, y, dir, m.c);
+      x2.fillStyle = '#c9cdd4'; x2.font = '12px "Microsoft YaHei"';
+      x2.fillText(m.text, (xa+xb)/2, y-11);
+      if (m.active){
+        const dx = xa + (xb-xa)*Math.min(1,m.t);
+        x2.beginPath(); x2.arc(dx, y, 5.5, 0, 7);
+        x2.shadowColor = m.c; x2.shadowBlur = 16; x2.fillStyle = m.c; x2.fill(); x2.shadowBlur = 0;
+      }
+    }
+  });
+}
+
+async function play2D(){
+  if (playing) return; playing = true;
+  document.getElementById('btnPlay').textContent = '演示中…';
+  hudLog.innerHTML = ''; seqMsgs.length = 0;
+  const t0 = performance.now();
+  const ticker = setInterval(()=>{ prog.style.width = Math.min(100,(performance.now()-t0)/24000*100)+'%'; }, 80);
+  function msg(a,b,text,c,dur,log){
+    return new Promise(res=>{
+      const m = {a,b,text,c,active:true,t:0,idx:seqMsgs.length};
+      seqMsgs.push(m);
+      const s = performance.now();
+      (function f(){
+        m.t = (performance.now()-s)/dur;
+        if (m.t >= 1){ m.active = false; if(log) logLine(log[0], log[1]); res(); }
+        else requestAnimationFrame(f);
+      })();
+    });
+  }
+  hudStep.textContent='① 对话：用户在 IDE 面板提问';
+  hudDesc.textContent='「这个项目里的文件能做什么？」— 插件采集项目文件夹/当前文件/选区/诊断，随消息一起发出';
+  await msg(0,1,'POST /v1/chat/completions（session=ide:w1）','#4daafc',1700,['u','用户 → POST /v1/chat/completions (session=ide:w1)']);
+  hudStep.textContent='② 会话：恢复历史 + 注入项目根';
+  hudDesc.textContent='sessions_store 载入历史；按 windowId 取 workspace 作为项目根，写入「运行环境」+ 匹配技能包';
+  await msg(1,2,'历史 + 项目根 + 技能匹配','#4daafc',1500,['u','↳ 项目根：…\\待办事项网页，当前文件 index.html']);
+  hudStep.textContent='③ 思考：判定动作型并选工具';
+  hudDesc.textContent='思考云检索记忆与 10 个技能包，规划 file_list → 读入口文件 → 汇总回答';
+  await msg(2,2,'记忆召回 · 判定必须真实执行','#b3a1ff',2200,['t','思考：命中技能 code_explore · 规划 file_list → file_read']);
+  hudStep.textContent='④ 执行：内置工具 + MCP 工具取数';
+  hudDesc.textContent='tool_call 循环：file_list 列目录 → mcp__fs__read_text_file 读内容 → 需要时 open_homepage 开浏览器';
+  await msg(2,3,'tool_call 循环','#e3b341',1300,['x','⚙ 进入工具调度层（内置 + MCP）']);
+  await msg(3,3,'file_list → mcp__fs__read_text_file ✓','#e3b341',2600,['x','⚙ 目录 2 个文件 · index.html 420B · script.js 602B']);
+  await msg(3,4,'工具结果回灌模型','#e3b341',1200,['x','结果已回灌 → 模型据此组织回答']);
+  hudStep.textContent='⑤ 输出：流式回答回到面板';
+  hudDesc.textContent='SSE 逐 token 上屏，会话同步到 /chat 与 Agent 中心，可无缝续聊';
+  await msg(4,0,'SSE 流式回答 · 会话跨端同步','#3fb950',2100,['o','AI：待办事项网页，可增删/勾选待办 ✓']);
+  hudStep.textContent='✅ 一轮请求完成';
+  hudDesc.textContent='2D 时序图演示结束。切回「3D 场景」或点击重播。';
+  clearInterval(ticker); prog.style.width='100%';
+  document.getElementById('btnPlay').textContent='↻ 重新演示';
+  playing = false;
+}
+
+/* --- HUD --- */
+const hudStep=document.getElementById('hudStep'), hudDesc=document.getElementById('hudDesc'),
+      hudLog=document.getElementById('hudLog'), prog=document.getElementById('progBar');
+function logLine(cls, txt){
+  const d=document.createElement('div'); d.className=cls; d.textContent=txt;
+  hudLog.appendChild(d); while(hudLog.children.length>5) hudLog.removeChild(hudLog.firstChild);
+}
+
+/* --- 演示编排 --- */
+let playing=false;
+function wait(ms){return new Promise(r=>setTimeout(r,ms));}
+function sparkAsync(curve,color,dur){return new Promise(res=>spawnSpark(curve,color,dur,res));}
+function pulse(nodeKey, times=3){
+  const n=nodes[nodeKey]; let i=0;
+  const iv=setInterval(()=>{ n.userData.halo.material.opacity = (i++%2? .3:.1);
+    if(i>=times*2){clearInterval(iv); n.userData.halo.material.opacity=.12;} },160);
+}
+
+async function play(){
+  if(playing) return; playing=true;
+  document.getElementById('btnPlay').textContent='演示中…';
+  hudLog.innerHTML=''; const t0=performance.now();
+  const setP=()=>{ prog.style.width = Math.min(100,(performance.now()-t0)/24000*100)+'%'; };
+  const ticker=setInterval(setP,80);
+
+  // 1 用户输入
+  hudStep.textContent='① 对话：用户在 IDE 面板提问';
+  hudDesc.textContent='「这个项目里的文件能做什么？」— 插件采集当前项目文件夹、光标/选区/诊断，随消息一起发出';
+  logLine('u','用户 → POST /v1/chat/completions (session=ide:w1)');
+  pulse('user'); await sparkAsync(cU2C, 0x4daafc, 1400);
+
+  // 2 进入服务端
+  hudStep.textContent='② 会话：恢复上下文 + 注入项目根';
+  hudDesc.textContent='sessions_store 载入历史；按 windowId 取最近上报的 workspace 作为项目根，写入「运行环境」';
+  pulse('chat'); logLine('u','↳ 项目根：…\\待办事项网页 · 当前文件 index.html · 诊断 0 条');
+  await wait(1400);
+
+  // 3 思考
+  hudStep.textContent='③ 思考：判定为动作型，选工具';
+  hudDesc.textContent='识别出「看文件」必须真实执行，规划 file_list → mcp__fs__read_text_file → 汇总';
+  pulse('think', 6); thinkPts.material.opacity=.95;
+  logLine('t','思考：命中技能 code_explore · 召回记忆 2 条');
+  await sparkAsync(cC2T, 0x7c5cff, 1200);
+  logLine('t','规划：file_list(".") → 读入口文件 → 回答');
+  await wait(1600); thinkPts.material.opacity=.55;
+
+  // 4 工具执行
+  hudStep.textContent='④ 执行：内置工具 + MCP 工具真实取数';
+  hudDesc.textContent='tool_call 循环：列目录 → 经 MCP filesystem 读文件内容 →（需要时）打开系统浏览器';
+  pulse('tools', 6);
+  await sparkAsync(cT2X, 0xe3b341, 1200);
+  for(const [i,tn] of toolNodes.entries()){
+    tn.userData.halo.material.opacity=.35;
+    logLine('x',['⚙ [工具调用 r1] file_list({"path":"."})',
+                 '⚙ [工具调用 r1] mcp__fs__read_text_file(script.js)',
+                 '⚙ [工具调用 r2] open_homepage({"url":"https://…"})'][i]);
+    await wait(1100); tn.userData.halo.material.opacity=.12;
+  }
+  logLine('x','[工具结果] 目录 2 个文件 · index.html 420B · script.js 602B ✓');
+  await wait(900);
+
+  // 5 回答
+  hudStep.textContent='⑤ 输出：流式回答回到面板';
+  hudDesc.textContent='SSE 逐 token 上屏；回答引用真实文件内容，而不是凭印象编造';
+  pulse('answer');
+  await sparkAsync(cX2A, 0x3fb950, 1100);
+  logLine('o','AI：这是个待办事项网页（index.html + script.js），可增删/勾选待办 ✓');
+  await sparkAsync(cA2U, 0x3fb950, 1300);
+  pulse('user');
+  logLine('o','会话已同步 → /chat 与 Agent 中心可无缝续聊');
+
+  hudStep.textContent='✅ 一轮请求完成';
+  hudDesc.textContent='全程约 24 秒的真实流程浓缩演示。再次点击可重播。';
+  clearInterval(ticker); prog.style.width='100%';
+  document.getElementById('btnPlay').textContent='↻ 重新演示';
+  playing=false;
+}
+document.getElementById('btnPlay').onclick = ()=>{ mode2d ? play2D() : play(); };
+
+/* --- 渲染循环 --- */
+function resize(){
+  const w=canvas.clientWidth, h=canvas.clientHeight;
+  if(canvas.width!==w||canvas.height!==h){
+    renderer.setSize(w,h,false); camera.aspect=w/h; camera.updateProjectionMatrix();
+  }
+  /* 窄高比时相机后退，保证场景与标签不被画布两侧裁切 */
+  const aspect = w/h || 1;
+  camDist = 22 * Math.max(1, Math.min(1.6, 1.6/aspect));
+}
+let camDist = 22;
+let T=0;
+(function loop(){
+  requestAnimationFrame(loop); resize(); T+=.008;
+  // 节点呼吸
+  Object.values(nodes).forEach((n,i)=>{
+    n.position.y = ST[Object.keys(ST)[i]].pos.y + Math.sin(T*2+i)*.18;
+    n.userData.ring.rotation.z += .004;
+  });
+  thinkPts.rotation.y += .0035;
+  sats.forEach((s,i)=>{
+    s.userData.angle += .006;
+    s.position.set(
+      ST.think.pos.x + Math.cos(s.userData.angle)*4.2,
+      ST.think.pos.y + Math.sin(T*1.5+i)*.5,
+      ST.think.pos.z + Math.sin(s.userData.angle)*4.2);
+  });
+  toolNodes.forEach((t,i)=>{ t.position.y += Math.sin(T*2.4+i*2)*.004; });
+  // 光点推进
+  for(let i=sparks.length-1;i>=0;i--){
+    const s=sparks[i]; s.t+=16/s.dur;
+    if(s.t>=1){ scene.remove(s.m); sparks.splice(i,1); s.done&&s.done(); continue; }
+    s.curve.getPoint(Math.min(1,s.t), s.m.position);
+    s.m.userData.halo.material.opacity = .2+.2*Math.sin(T*20);
+  }
+  // 相机
+  if(autoCam && !dragging){ ry += .0016; }
+  const R=camDist;
+  camera.position.set(Math.sin(ry)*R, 6+Math.sin(rx)*10, Math.cos(ry)*R);
+  camera.lookAt(0, 1, 0);
+  // 跟随光点视角：镜头贴着当前飞行的光点走（第一视角穿越管道）
+  if(followCam && sparks.length){
+    const s = sparks[0];
+    const p = s.curve.getPoint(Math.min(1, s.t));
+    const tan = s.curve.getTangent(Math.min(1, s.t));
+    camera.position.set(p.x - tan.x*4, p.y + 2.2, p.z - tan.z*4);
+    camera.lookAt(p.x + tan.x*3, p.y + tan.y*3, p.z + tan.z*3);
+  }
+  renderer.render(scene, camera);
+  // 2D 时序图模式：同步逐帧重绘
+  if(mode2d) drawSeq();
+})();
+})();
+</script>
+<script>
+/* 本地服务状态徽标：直连 8000/health，失败即显示未启动（不假装在线） */
+(function(){
+  const b = document.getElementById('svcBadge');
+  if(!b) return;
+  const paint = (txt, offline)=>{
+    b.textContent = txt;
+    b.style.borderColor = offline ? '#5a3a1f' : '';
+    b.style.color = offline ? 'var(--warn)' : '';
+  };
+  let fails = 0;
+  async function probe(){
+    try{
+      const ctl = new AbortController();
+      const timer = setTimeout(()=>ctl.abort(), 6000);
+      const r = await fetch('http://127.0.0.1:8000/health', {cache:'no-store', signal:ctl.signal});
+      clearTimeout(timer);
+      if(!r.ok) throw new Error('http '+r.status);
+      const d = await r.json();
+      fails = 0;
+      paint('● 本地服务运行中 :8000 · ' + (d.model || 'local'), false);
+    }catch(e){
+      fails++;
+      // 连续 2 次失败才判定离线，避免后端重启瞬间误报
+      if(fails >= 2) paint('○ 本地服务未就绪 :8000（自动重试中）', true);
+    }
+  }
+  // 延迟首探，避开页面自身导航造成的请求中断
+  setTimeout(probe, 800);
+  setInterval(probe, 20000);
+})();
+</script>
+</body>
+</html>

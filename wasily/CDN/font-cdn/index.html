@@ -1,0 +1,256 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Open Font CDN - 开源字体库</title>
+  <meta name="description" content="隐私优先、自托管、兼容 Google Fonts API 的开源字体 CDN">
+  <style>
+    /* ========== CSS Variables & Reset ========== */
+    :root {
+      --bg: #ffffff; --bg-card: #f8f9fa; --bg-hover: #e9ecef;
+      --text: #212529; --text-muted: #6c757d;
+      --border: #dee2e6; --accent: #0d6efd; --accent-hover: #0b5ed7;
+      --code-bg: #f1f3f5; --radius: 8px; --shadow: 0 1px 3px rgba(0,0,0,.08);
+      --font-ui: system-ui, -apple-system, sans-serif;
+    }
+    [data-theme="dark"] {
+      --bg: #1a1a2e; --bg-card: #16213e; --bg-hover: #0f3460;
+      --text: #e0e0e0; --text-muted: #a0a0a0;
+      --border: #2a2a4a; --accent: #4cc9f0; --accent-hover: #4895ef;
+      --code-bg: #0f3460; --shadow: 0 1px 3px rgba(0,0,0,.3);
+    }
+    *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+    body { font-family: var(--font-ui); background: var(--bg); color: var(--text); line-height: 1.6; transition: background .3s, color .3s; }
+    a { color: var(--accent); text-decoration: none; }
+    a:hover { color: var(--accent-hover); }
+
+    /* ========== Layout ========== */
+    .container { max-width: 1200px; margin: 0 auto; padding: 0 24px; }
+    header { padding: 32px 0; border-bottom: 1px solid var(--border); margin-bottom: 32px; }
+    header h1 { font-size: 1.75rem; font-weight: 700; }
+    header p { color: var(--text-muted); margin-top: 4px; }
+    .header-actions { display: flex; gap: 12px; align-items: center; margin-top: 16px; flex-wrap: wrap; }
+
+    /* ========== Search & Filter ========== */
+    .search-bar {
+      width: 100%; max-width: 480px; padding: 10px 16px;
+      border: 1px solid var(--border); border-radius: var(--radius);
+      background: var(--bg-card); color: var(--text); font-size: 1rem;
+      outline: none; transition: border-color .2s;
+    }
+    .search-bar:focus { border-color: var(--accent); }
+    .stats { color: var(--text-muted); font-size: .875rem; white-space: nowrap; }
+
+    /* ========== Font Grid ========== */
+    .font-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(340px, 1fr)); gap: 20px; padding-bottom: 64px; }
+    .font-card {
+      background: var(--bg-card); border: 1px solid var(--border);
+      border-radius: var(--radius); padding: 24px;
+      box-shadow: var(--shadow); transition: transform .2s, box-shadow .2s;
+    }
+    .font-card:hover { transform: translateY(-2px); box-shadow: 0 4px 12px rgba(0,0,0,.12); }
+    .font-card__header { display: flex; justify-content: space-between; align-items: baseline; margin-bottom: 12px; }
+    .font-card__name { font-size: 1.25rem; font-weight: 600; }
+    .font-card__license { font-size: .75rem; color: var(--text-muted); background: var(--code-bg); padding: 2px 8px; border-radius: 4px; }
+    .font-card__preview {
+      font-size: 1.5rem; line-height: 1.4; margin: 16px 0;
+      min-height: 3.2em; overflow: hidden; word-break: break-word;
+    }
+    .font-card__weights { display: flex; gap: 6px; flex-wrap: wrap; margin-bottom: 16px; }
+    .weight-btn {
+      padding: 4px 12px; border: 1px solid var(--border); border-radius: 4px;
+      background: transparent; color: var(--text); cursor: pointer; font-size: .8rem;
+      transition: all .2s;
+    }
+    .weight-btn.active, .weight-btn:hover { background: var(--accent); color: #fff; border-color: var(--accent); }
+    .copy-row { display: flex; gap: 8px; align-items: center; }
+    .copy-input {
+      flex: 1; padding: 8px 12px; border: 1px solid var(--border); border-radius: 4px;
+      background: var(--code-bg); color: var(--text); font-family: monospace; font-size: .8rem;
+      overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
+    }
+    .copy-btn {
+      padding: 8px 16px; border: none; border-radius: 4px;
+      background: var(--accent); color: #fff; cursor: pointer; font-size: .8rem;
+      white-space: nowrap; transition: background .2s;
+    }
+    .copy-btn:hover { background: var(--accent-hover); }
+    .copy-btn.copied { background: #198754; }
+
+    /* ========== Theme Toggle ========== */
+    .theme-toggle {
+      padding: 8px 12px; border: 1px solid var(--border); border-radius: var(--radius);
+      background: var(--bg-card); color: var(--text); cursor: pointer; font-size: .875rem;
+    }
+
+    /* ========== Empty State ========== */
+    .empty-state { grid-column: 1 / -1; text-align: center; padding: 64px 0; color: var(--text-muted); }
+
+    /* ========== Responsive ========== */
+    @media (max-width: 640px) {
+      .font-grid { grid-template-columns: 1fr; }
+      header h1 { font-size: 1.35rem; }
+      .font-card__preview { font-size: 1.2rem; }
+    }
+  </style>
+</head>
+<body>
+  <div class="container">
+    <header>
+      <h1>🌐 Open Font CDN</h1>
+      <p>隐私优先 · 兼容 Google Fonts API · 完全开源可自托管</p>
+      <div class="header-actions">
+        <input type="search" class="search-bar" id="searchInput" placeholder="搜索字体名称… (如 Noto, Inter, LXGW)" autocomplete="off">
+        <span class="stats" id="statsText">加载中…</span>
+        <button class="theme-toggle" id="themeToggle">🌙 暗色</button>
+      </div>
+    </header>
+    <main class="font-grid" id="fontGrid"></main>
+  </div>
+
+<script>
+/**
+ * ============================================================
+ *  ⚙️ 配置区 — 部署时只需修改此处
+ * ============================================================
+ */
+const CONFIG = {
+  // 你的 CDN 域名（不带尾部斜杠）
+  cdnBase: window.location.origin,
+  // manifest 路径（相对于 cdnBase）
+  manifestPath: '/fonts-manifest.json',
+  // 预览文本
+  previewText: '永远相信美好的事情即将发生 The quick brown fox jumps over the lazy dog',
+};
+
+/**
+ * ============================================================
+ *  🧠 核心逻辑
+ * ============================================================
+ */
+const $ = (sel) => document.querySelector(sel);
+const fontGrid = $('#fontGrid');
+const searchInput = $('#searchInput');
+const statsText = $('#statsText');
+let allFamilies = [];
+
+// --- Theme ---
+function initTheme() {
+  const saved = localStorage.getItem('font-cdn-theme');
+  const prefersDark = window.matchMedia('(prefers-color-scheme: dark)').matches;
+  if (saved === 'dark' || (!saved && prefersDark)) {
+    document.documentElement.setAttribute('data-theme', 'dark');
+    $('#themeToggle').textContent = '☀️ 亮色';
+  }
+}
+$('#themeToggle').addEventListener('click', () => {
+  const isDark = document.documentElement.getAttribute('data-theme') === 'dark';
+  document.documentElement.setAttribute('data-theme', isDark ? '' : 'dark');
+  $('#themeToggle').textContent = isDark ? '🌙 暗色' : '☀️ 亮色';
+  localStorage.setItem('font-cdn-theme', isDark ? 'light' : 'dark');
+});
+
+// --- Fetch Manifest ---
+async function loadManifest() {
+  try {
+    const res = await fetch(`${CONFIG.cdnBase}${CONFIG.manifestPath}`);
+    if (!res.ok) throw new Error(`HTTP ${res.status}`);
+    const data = await res.json();
+    allFamilies = data.families || [];
+    renderGrid(allFamilies);
+    statsText.textContent = `${allFamilies.length} 个字体家族 · ${allFamilies.reduce((s, f) => s + f.variants.length, 0)} 个变体`;
+  } catch (err) {
+    fontGrid.innerHTML = `<div class="empty-state">❌ 加载失败: ${err.message}<br>请确认 fonts-manifest.json 已正确部署</div>`;
+    statsText.textContent = '加载失败';
+  }
+}
+
+// --- Render ---
+function renderGrid(families) {
+  if (families.length === 0) {
+    fontGrid.innerHTML = '<div class="empty-state">没有找到匹配的字体</div>';
+    return;
+  }
+  fontGrid.innerHTML = families.map((f) => buildCard(f)).join('');
+  // 绑定事件（使用事件委托更高效，此处为清晰起见逐卡绑定）
+  fontGrid.querySelectorAll('.font-card').forEach(bindCardEvents);
+}
+
+function buildCard(font) {
+  const weights = [...new Set(font.variants.map(v => v.weight))].sort();
+  const defaultWeight = weights.includes('400') ? '400' : weights[0];
+  const cssUrl = `${CONFIG.cdnBase}/css2?family=${encodeURIComponent(font.family)}:wght@${weights.join(';')}&display=swap`;
+
+  return `
+    <article class="font-card" data-family-id="${font.id}" data-family-name="${font.family}">
+      <div class="font-card__header">
+        <span class="font-card__name">${font.family}</span>
+        <span class="font-card__license">${font.license}</span>
+      </div>
+      <div class="font-card__weights">
+        ${weights.map(w => `<button class="weight-btn${w === defaultWeight ? ' active' : ''}" data-weight="${w}">${w}</button>`).join('')}
+      </div>
+      <div class="font-card__preview" style="font-family:'${font.family}',${font.fallback.join(',')};font-weight:${defaultWeight}">
+        ${CONFIG.previewText}
+      </div>
+      <div class="copy-row">
+        <input class="copy-input" readonly value="${cssUrl}" data-base-url="${cssUrl}">
+        <button class="copy-btn">复制</button>
+      </div>
+    </article>`;
+}
+
+function bindCardEvents(card) {
+  const preview = card.querySelector('.font-card__preview');
+  const copyInput = card.querySelector('.copy-input');
+  const copyBtn = card.querySelector('.copy-btn');
+  const weightBtns = card.querySelectorAll('.weight-btn');
+
+  // 字重切换
+  weightBtns.forEach(btn => {
+    btn.addEventListener('click', () => {
+      weightBtns.forEach(b => b.classList.remove('active'));
+      btn.classList.add('active');
+      preview.style.fontWeight = btn.dataset.weight;
+    });
+  });
+
+  // 复制
+  copyBtn.addEventListener('click', async () => {
+    try {
+      await navigator.clipboard.writeText(copyInput.value);
+      copyBtn.textContent = '✓ 已复制';
+      copyBtn.classList.add('copied');
+      setTimeout(() => { copyBtn.textContent = '复制'; copyBtn.classList.remove('copied'); }, 2000);
+    } catch {
+      copyInput.select();
+      document.execCommand('copy');
+    }
+  });
+}
+
+// --- Search ---
+searchInput.addEventListener('input', debounce((e) => {
+  const q = e.target.value.trim().toLowerCase();
+  if (!q) { renderGrid(allFamilies); return; }
+  const filtered = allFamilies.filter(f =>
+    f.family.toLowerCase().includes(q) ||
+    f.id.includes(q) ||
+    (f.source && f.source.toLowerCase().includes(q))
+  );
+  renderGrid(filtered);
+  statsText.textContent = `找到 ${filtered.length} / ${allFamilies.length} 个字体`;
+}, 200));
+
+function debounce(fn, ms) {
+  let timer;
+  return (...args) => { clearTimeout(timer); timer = setTimeout(() => fn(...args), ms); };
+}
+
+// --- Init ---
+initTheme();
+loadManifest();
+</script>
+</body>
+</html>

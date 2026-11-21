@@ -1,0 +1,34 @@
+{
+  "include": [
+    "wasily/AI"
+  ],
+  "exclude": [
+    "**/node_modules",
+    "**/__pycache__",
+    "**/.venv",
+    "**/site-packages",
+    "**/train_venv",
+    "**/dist",
+    "**/build",
+    ".git",
+    ".trae",
+    ".trae-html-share-packages",
+    "tick-stock-panel",
+    "wasily/tools",
+    "wasily/AI/.pw-profile",
+    "wasily/AI/.playwright-mcp",
+    "wasily/AI/outputs",
+    "wasily/AI/data",
+    "wasily/AI/kb_index",
+    "wasily/AI/index",
+    "wasily/AI/agent/sessions_store",
+    "wasily_折叠对话验证",
+    "wasily_提示词瘦身验证"
+  ],
+  "pythonVersion": "3.12",
+  "typeCheckingMode": "basic",
+  "useLibraryCodeForTypes": true,
+  "diagnosticSeverityOverrides": {
+    "reportMissingImports": "warning"
+  }
+}

@@ -1,0 +1,13 @@
+{
+  "name": "wasily-brain-float",
+  "version": "1.0.0",
+  "private": true,
+  "description": "wasily 桌面悬浮 3D 大脑（Electron per-pixel alpha 透明窗口）",
+  "main": "main.js",
+  "scripts": {
+    "start": "electron ."
+  },
+  "devDependencies": {
+    "electron": "^33.0.0"
+  }
+}

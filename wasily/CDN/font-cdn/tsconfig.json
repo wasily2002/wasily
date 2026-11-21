@@ -1,0 +1,73 @@
+{
+  "$schema": "./fonts-manifest.schema.json",
+  "version": "1.0.0",
+  "generatedAt": "2026-10-07T16:25:00+08:00",
+  "families": [
+    {
+      "id": "noto-sans-sc",
+      "family": "Noto Sans SC",
+      "fallback": ["system-ui", "sans-serif"],
+      "license": "OFL-1.1",
+      "source": "@fontsource/noto-sans-sc@5.1.0",
+      "variants": [
+        {
+          "weight": "400",
+          "style": "normal",
+          "path": "fonts/noto-sans-sc/400-normal.woff2",
+          "size": 38912,
+          "unicodeRange": "U+4E00-9FFF,U+3000-303F,U+FF00-FFEF"
+        },
+        {
+          "weight": "700",
+          "style": "normal",
+          "path": "fonts/noto-sans-sc/700-normal.woff2",
+          "size": 40128,
+          "unicodeRange": "U+4E00-9FFF,U+3000-303F,U+FF00-FFEF"
+        },
+        {
+          "weight": "400",
+          "style": "normal",
+          "path": "fonts/noto-sans-sc/400-normal-latin.woff2",
+          "size": 12288,
+          "unicodeRange": "U+0000-00FF,U+0131,U+0152-0153,U+02BB-02BC,U+02C6,U+02DA,U+02DC,U+2000-206F"
+        }
+      ]
+    },
+    {
+      "id": "inter",
+      "family": "Inter",
+      "fallback": ["system-ui", "sans-serif"],
+      "license": "OFL-1.1",
+      "source": "@fontsource/inter@5.1.0",
+      "variants": [
+        {
+          "weight": "400",
+          "style": "normal",
+          "path": "fonts/inter/400-normal.woff2",
+          "size": 24576
+        },
+        {
+          "weight": "700",
+          "style": "normal",
+          "path": "fonts/inter/700-normal.woff2",
+          "size": 25600
+        }
+      ]
+    },
+    {
+      "id": "jetbrains-mono",
+      "family": "JetBrains Mono",
+      "fallback": ["ui-monospace", "monospace"],
+      "license": "OFL-1.1",
+      "source": "@fontsource/jetbrains-mono@5.1.0",
+      "variants": [
+        {
+          "weight": "400",
+          "style": "normal",
+          "path": "fonts/jetbrains-mono/400-normal.woff2",
+          "size": 32768
+        }
+      ]
+    }
+  ]
+}

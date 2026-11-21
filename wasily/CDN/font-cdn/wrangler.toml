@@ -1,0 +1,12 @@
+name = "open-font-cdn"
+main = "src/index.ts"
+compatibility_date = "2024-09-01"
+
+# R2 存储桶绑定（需先在 Cloudflare Dashboard 创建名为 font-assets 的桶）
+
+[[r2_buckets]]
+binding = "FONT_BUCKET"
+bucket_name = "font-assets"
+
+# 自定义域名（可选）
+# routes = [{ pattern = "fonts.yourdomain.com/*", zone_name = "yourdomain.com" }]

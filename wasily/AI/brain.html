@@ -1,0 +1,2640 @@
+﻿<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<title>wasily Brain</title>
+<style>
+  :root {
+    --acc: #ff8a3c;   /* 强调橙 */
+    --cy: #39d0ff;    /* 科技青 */
+    --bg-menu: rgba(12, 18, 30, 0.96);
+    --bd-menu: rgba(57, 208, 255, 0.28);
+  }
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+  html, body {
+    background: #000000;
+    width: 100%; height: 100%;
+    overflow: hidden;
+    font-family: "Segoe UI", "Microsoft YaHei", sans-serif;
+    user-select: none;
+    cursor: grab;
+  }
+  body:active { cursor: grabbing; }
+  /* #wrap 承载视图层变换：平移(跟踪放大) + 缩放(5级) + 旋转(0~360°) */
+  #wrap { position: fixed; inset: 0; transform-origin: 50% 50%; will-change: transform; }
+
+  #glow {
+    position: absolute; left: 50%; top: 50%;
+    width: 520px; height: 380px; transform: translate(-50%, -50%);
+    background: radial-gradient(ellipse at center,
+      rgba(22, 75, 155, 0.22) 0%,
+      rgba(12, 48, 110, 0.10) 46%,
+      transparent 72%);
+    filter: blur(10px);
+    pointer-events: none;
+    transition: opacity 0.6s;
+  }
+  body.thinking #glow { opacity: 1.5; }
+
+  #brainCanvas { position: absolute; inset: 0; width: 100%; height: 100%; }
+
+  #flash {
+    position: fixed; inset: 0; pointer-events: none; opacity: 0;
+    background: radial-gradient(ellipse at center, rgba(130,205,255,0.16), transparent 70%);
+  }
+  #flash.go { animation: flashA 0.45s ease-out; }
+  @keyframes flashA { 0% { opacity: 1; } 100% { opacity: 0; } }
+
+  /* 标题/提示作为窗口拖动区 */
+  .pywebview-drag-region { -webkit-app-region: drag; }
+  #title {
+    position: absolute; top: 12px; left: 0; right: 0;
+    text-align: center; pointer-events: none;
+    font: 600 15px Consolas, monospace;
+    color: #7fd4ff;
+    letter-spacing: 8px;
+    text-shadow: 0 0 14px rgba(0, 180, 255, 0.9), 0 0 36px rgba(0, 140, 255, 0.5);
+  }
+  #subtitle {
+    position: absolute; top: 34px; left: 0; right: 0;
+    text-align: center; pointer-events: none;
+    font: 10px "Microsoft YaHei", sans-serif;
+    color: rgba(140, 190, 235, 0.55);
+    letter-spacing: 3px;
+  }
+  #status {
+    position: absolute; bottom: 34px; left: 0; right: 0;
+    text-align: center; pointer-events: none;
+    font: 12px Consolas, monospace;
+    color: rgba(127, 212, 255, 0.9);
+    letter-spacing: 3px;
+    text-shadow: 0 0 10px rgba(0, 180, 255, 0.8);
+  }
+  #status .dot {
+    display: inline-block; width: 7px; height: 7px; border-radius: 50%;
+    background: #35d07f; margin-right: 7px; vertical-align: 1px;
+    box-shadow: 0 0 8px #35d07f;
+  }
+  #status.busy .dot { background: #ffaa33; box-shadow: 0 0 8px #ffaa33; animation: blink 0.7s infinite; }
+  #status.err .dot  { background: #ff5555; box-shadow: 0 0 8px #ff5555; }
+  #hint {
+    position: absolute; bottom: 12px; left: 0; right: 0;
+    text-align: center; pointer-events: none;
+    font: 10px "Microsoft YaHei", sans-serif;
+    color: rgba(140, 190, 235, 0.42);
+    letter-spacing: 1px;
+  }
+  @keyframes blink { 50% { opacity: 0.25; } }
+
+  /* ============ 思考 token 计数（悬浮在大脑下方） ============ */
+  #tokHud {
+    position: fixed; left: 0; top: 0; z-index: 8;
+    transform: translate(-50%, 0);
+    display: none; pointer-events: none; white-space: nowrap;
+    font: 11px Consolas, monospace; letter-spacing: 1px;
+    color: rgba(255, 205, 90, 0.92);
+    text-shadow: 0 0 10px rgba(255, 180, 60, 0.55);
+  }
+  #tokHud.show { display: block; }
+
+  #ctl {
+    position: absolute; top: 10px; right: 12px; z-index: 10;
+    display: flex; gap: 6px;
+  }
+  .wbtn {
+    width: 26px; height: 26px; border-radius: 50%;
+    border: 1px solid rgba(127, 212, 255, 0.35);
+    background: rgba(8, 20, 38, 0.6);
+    color: #7fd4ff; cursor: pointer; font-size: 13px;
+    display: flex; align-items: center; justify-content: center;
+    transition: all 0.15s;
+  }
+  .wbtn:hover { background: rgba(30, 70, 120, 0.85); border-color: #7fd4ff; box-shadow: 0 0 12px rgba(0, 180, 255, 0.55); }
+  .wbtn.close:hover { background: rgba(200, 50, 50, 0.85); border-color: #ff7777; }
+
+  /* ============ 帧率显示框（性能调试用） ============ */
+  #fpsBox {
+    position: absolute; top: 10px; left: 12px; z-index: 20;
+    font: 10px Consolas, monospace; color: var(--cy);
+    background: rgba(8, 20, 38, 0.55);
+    border: 1px solid var(--bd-menu); border-radius: 5px;
+    padding: 2px 8px; display: none; pointer-events: none;
+  }
+
+  /* ============ 自定义右键菜单（暗色主题，与整体风格一致） ============ */
+  #ctxMenu, .sub {
+    min-width: 172px; padding: 6px;
+    background: var(--bg-menu);
+    border: 1px solid var(--bd-menu); border-radius: 10px;
+    box-shadow: 0 8px 32px rgba(0, 20, 40, 0.65), 0 0 18px rgba(57, 208, 255, 0.12);
+    font: 12px "Microsoft YaHei", sans-serif; color: #cfe8ff;
+    backdrop-filter: blur(8px);
+  }
+  #ctxMenu { position: fixed; z-index: 10000; display: none; }
+  .mg { padding: 4px 12px 2px; font-size: 10px; letter-spacing: 2px; color: rgba(140, 190, 235, 0.45); }
+  .msep { height: 1px; margin: 5px 8px; background: linear-gradient(90deg, transparent, var(--bd-menu), transparent); }
+
+  /* ============ 快速提问浮层 ============ */
+  #quickAsk {
+    display: none; position: fixed; left: 50%; bottom: 12%;
+    transform: translateX(-50%); z-index: 9999;
+    background: var(--bg-menu); border: 1px solid var(--bd-menu);
+    border-radius: 10px; padding: 8px; gap: 6px;
+    box-shadow: 0 8px 32px rgba(0,0,0,.5);
+  }
+  #quickAsk.show { display: flex; }
+  #qaInput {
+    width: 320px; background: rgba(255,255,255,.06); color: #dfe8f5;
+    border: 1px solid var(--bd-menu); border-radius: 6px;
+    padding: 7px 10px; font-size: 13px; outline: none;
+  }
+  #qaInput:focus { border-color: rgba(57,208,255,.6); }
+  #qaSend {
+    background: rgba(57,208,255,.18); color: #39d0ff;
+    border: 1px solid var(--bd-menu); border-radius: 6px;
+    padding: 0 14px; font-size: 13px; cursor: pointer;
+  }
+  #qaSend:hover { background: rgba(57,208,255,.3); }
+
+  /* ============ 大脑悬浮对话框（透明玻璃风，可拖/缩放/全屏） ============ */
+  .bpanel {
+    display: none; position: fixed; z-index: 9998; flex-direction: column;
+    background: var(--bg-menu); border: 1px solid var(--bd-menu);
+    transform-style: preserve-3d; backface-visibility: hidden;
+    border-radius: 12px; box-shadow: 0 10px 40px rgba(0,0,0,.55);
+    backdrop-filter: blur(6px); min-width: 220px; min-height: 130px;
+  }
+  .bpanel.show { display: flex; }
+  .bpanel.full { left: 2vw !important; top: 2vh !important;
+    width: 96vw !important; height: 96vh !important; }
+  /* 标题/按钮条默认隐藏，只显示中间内容区；鼠标移入面板才浮出 */
+  .bp-hd {
+    position: absolute; top: 0; left: 0; right: 0; z-index: 2;
+    display: flex; align-items: center; justify-content: space-between;
+    padding: 5px 10px; cursor: move; user-select: none;
+    border-bottom: 1px solid var(--bd-menu); border-radius: 12px 12px 0 0;
+    background: linear-gradient(rgba(12,18,30,.96), rgba(12,18,30,.80));
+    opacity: 0; visibility: hidden; pointer-events: none;
+    transition: opacity .16s ease;
+  }
+  .bpanel:hover .bp-hd,
+  .bpanel.full .bp-hd { opacity: 1; visibility: visible; pointer-events: auto; }
+  .bp-title { font-size: 12px; color: #39d0ff; letter-spacing: 1px; }
+  .bp-btns { display: flex; gap: 4px; }
+  .bp-btn {
+    width: 20px; height: 20px; border: 1px solid var(--bd-menu);
+    background: rgba(255,255,255,.05); color: #8fb8cf; border-radius: 5px;
+    font-size: 12px; line-height: 1; cursor: pointer; padding: 0;
+  }
+  .bp-btn:hover { background: rgba(57,208,255,.25); color: #fff; }
+  .bp-body {
+    flex: 1; overflow: auto; padding: 8px 10px;
+    font-size: 12px; color: #cfe3f5; line-height: 1.6;
+    white-space: pre-wrap; word-break: break-word;
+  }
+  .bp-dim { color: #5f7d94; }
+  .bp-grip {
+    position: absolute; right: 2px; bottom: 2px; width: 14px; height: 14px;
+    cursor: nwse-resize; border-right: 2px solid var(--bd-menu);
+    border-bottom: 2px solid var(--bd-menu); border-radius: 0 0 4px 0;
+    opacity: 0; transition: opacity .16s ease;
+  }
+  .bpanel:hover .bp-grip { opacity: 1; }
+  /* 内容区为悬浮的标题条让出整条高度，鼠标浮出工具栏时不压住正文 */
+  .bpanel .bp-body { padding-top: 32px; }
+  #bpInput {
+    width: 100%; height: calc(100% - 52px); min-height: 48px;
+    background: rgba(255,255,255,.06); color: #dfe8f5;
+    border: 1px solid var(--bd-menu); border-radius: 6px;
+    padding: 7px 9px; font-size: 13px; outline: none; resize: none;
+    box-sizing: border-box;
+  }
+  #bpInput:focus { border-color: rgba(57,208,255,.6); }
+  #bpSend {
+    margin-top: 6px; float: right; background: rgba(57,208,255,.18);
+    color: #39d0ff; border: 1px solid var(--bd-menu); border-radius: 6px;
+    padding: 4px 16px; font-size: 12px; cursor: pointer;
+  }
+  #bpSend:hover { background: rgba(57,208,255,.3); }
+  #thinkBody .t-step { padding: 2px 0; border-bottom: 1px dashed rgba(61,106,140,.25); }
+  #thinkBody .t-tool { color: #ffb020; }
+
+  /* ============ 微信式思考气泡（左聊气泡 + 中间工具胶囊 + 底部折叠区） ============ */
+  .tb-left { display: flex; align-items: flex-start; gap: 5px; margin: 5px 0 6px; }
+  .tb-idx { font-size: 10px; color: #7aa8c4; flex-shrink: 0; margin-top: 3px; }
+  .tb-bubble {
+    background: rgba(88, 108, 155, .32); color: #e2ecf7;
+    border: 1px solid rgba(140, 175, 220, .28);
+    border-radius: 10px 12px 12px 4px; padding: 5px 9px;
+    font-size: 11px; line-height: 1.5; max-width: 92%;
+    word-break: break-word; white-space: pre-wrap;
+  }
+  .tb-capsule {
+    text-align: center; margin: 3px 0;
+  }
+  .tb-toolname {
+    display: inline-block; background: rgba(255, 176, 32, .14);
+    border: 1px solid rgba(255, 176, 32, .4); border-radius: 20px;
+    padding: 2px 10px; font-size: 10.5px; color: #ffb020;
+  }
+  .thoughts-fold { margin-top: 10px; border-top: 1px dashed rgba(140, 175, 220, .25); padding-top: 6px; }
+  .tf-hd {
+    font-size: 10.5px; color: #7aa8c4; cursor: pointer;
+    user-select: none; padding: 3px 0;
+  }
+  .tf-hd:hover { color: #39d0ff; }
+  .tf-arrow { display: inline-block; transition: transform .2s; margin-left: 3px; }
+  .thoughts-fold.open .tf-arrow { transform: rotate(90deg); }
+  .tf-body { margin-top: 6px; }
+
+  .mi {
+    padding: 6px 12px; border-radius: 6px; cursor: pointer;
+    display: flex; justify-content: space-between; align-items: center; gap: 10px;
+    white-space: nowrap;
+  }
+  .mi:hover { background: rgba(57, 208, 255, 0.12); color: #ffffff; }
+  .mi.checked { color: var(--cy); }
+  .mi.checked::after { content: "✓"; color: var(--cy); }
+  .mi.danger:hover { background: rgba(200, 50, 50, 0.55); }
+  .has-sub { position: relative; }
+  .has-sub > .sub { display: none; position: absolute; left: 100%; top: -7px; margin-left: 2px; }
+  .has-sub:hover > .sub { display: block; }
+  .mi input[type="range"] { width: 92px; accent-color: var(--acc); cursor: pointer; }
+  .mi input[type="number"] {
+    width: 52px; background: rgba(8, 20, 38, 0.8); color: var(--cy);
+    border: 1px solid var(--bd-menu); border-radius: 4px;
+    padding: 2px 4px; font: 11px Consolas, monospace; outline: none;
+  }
+  .mi b { font: 10px Consolas, monospace; color: var(--cy); min-width: 34px; text-align: right; }
+
+  /* ===== 纯大脑模式 =====
+     ?embed=1 内嵌对话页：透明底、无任何控件/文字，仅神经网络图
+     ?float=1 桌面悬浮：页面全透明（pywebview per-pixel alpha 真穿透）、
+              无拖动区(窗口固定不可移动)、保留右键菜单 */
+  html.mode-embed, html.mode-embed body { background: transparent; cursor: default; }
+  html.mode-embed body:active { cursor: default; }
+  html.mode-embed #glow { opacity: 0.75; }
+  html.mode-embed #title, html.mode-embed #subtitle, html.mode-embed #status,
+  html.mode-embed #hint, html.mode-embed #ctl, html.mode-embed #fpsBox,
+  html.mode-embed #ctxMenu, html.mode-embed #flash { display: none !important; }
+  /* 桌面悬浮纯大脑（Electron per-pixel alpha 真透明窗口）：
+     页面全透明，透明像素经 Chromium 原生合成透出桌面，无黑底/无矩形；
+     pywebview 回退宿主则由页面推送轮廓、桌面端 SetWindowRgn 异形裁剪。
+     移除一切背景层/装饰层（光晕、闪屏、深色云团），仅保留大脑本体渲染 */
+  html.mode-float, html.mode-float body { background: transparent !important; cursor: grab; }
+  html.mode-float.brain-dragging, html.mode-float.brain-dragging body { cursor: grabbing !important; }
+  html.mode-float #title, html.mode-float #subtitle, html.mode-float #status,
+  html.mode-float #hint, html.mode-float #ctl, html.mode-float #fpsBox,
+  html.mode-float #glow, html.mode-float #flash { display: none !important; }
+</style>
+<script>
+/* 尽早设置模式类，避免控件闪烁；类挂在 <html> 上可在 body 解析前生效 */
+(function () {
+  var m = new URLSearchParams(location.search);
+  if (m.get('embed')) document.documentElement.classList.add('mode-embed');
+  if (m.get('float')) document.documentElement.classList.add('mode-float');
+})();
+</script>
+<script src="icons.js"></script>
+
+</head>
+<body>
+<div id="wrap">
+  <div id="glow"></div>
+  <canvas id="brainCanvas"></canvas>
+  <div id="title" class="pywebview-drag-region">W A S I L Y</div>
+  <div id="subtitle">左脑 · 逻辑 &nbsp;&nbsp;|&nbsp;&nbsp; 右脑 · 感性</div>
+  <div id="status"><span class="dot"></span><span id="statusText">正在唤醒模型…</span></div>
+  <div id="hint">双击开关对话 · 拖动移动大脑 · Alt+拖动 旋转 · 滚轮缩放 · 右键菜单</div>
+</div>
+<div id="tokHud"></div>
+<div id="flash"></div>
+<div id="fpsBox">FPS --</div>
+<!-- 自定义右键菜单 -->
+<div id="ctxMenu">
+  <div class="mg">显示设置</div>
+  <div class="mi has-sub">缩放 <span>▸</span>
+    <div class="sub" id="zoomSub">
+      <div class="mi" data-zoom="0.065">桌面小图标</div>
+      <div class="mi" data-zoom="0.2">20%</div>
+      <div class="mi" data-zoom="0.5">50%</div>
+      <div class="mi" data-zoom="1">100%</div>
+      <div class="mi" data-zoom="2">200%</div>
+      <div class="mi" data-zoom="4">400%</div>
+      <div class="mi" data-zoom="8">800%</div>
+      <div class="mi" data-zoom="16">1600%</div>
+    </div>
+  </div>
+  <div class="mi">不透明度 <input type="range" id="opRange" min="20" max="100" step="1" value="100"> <b id="opVal">100%</b></div>
+  <div class="mi" id="miTop">窗口置顶</div>
+  <div class="msep"></div>
+  <div class="mg">交互控制</div>
+  <div class="mi has-sub">对话页面 <span>▸</span>
+    <div class="sub" id="chatSub">
+      <div class="mi" id="miChat">打开对话页面</div>
+      <div class="mi" id="miQuickAsk">快速提问…</div>
+      <div class="mi" id="miChatCfg">配置对话页面</div>
+    </div>
+  </div>
+  <div class="mi" id="miHide">隐藏大脑</div>
+  <div class="mi" id="miSpawn">启动桌面大脑</div>
+  <div class="mi has-sub">旋转 <span>▸</span>
+    <div class="sub" id="rotSub">
+      <div class="mi" data-rot="0">复位 0°</div>
+      <div class="mi" data-rot="90">90°</div>
+      <div class="mi" data-rot="180">180°</div>
+      <div class="mi" data-rot="270">270°</div>
+      <div class="mi">自定义 <input type="number" id="rotInput" min="0" max="360" step="1" value="0">°</div>
+    </div>
+  </div>
+  <div class="mi" id="miRotAuto">停止旋转</div>
+  <div class="msep"></div>
+  <div class="mg">功能页面（浏览器独立打开）</div>
+  <div class="mi" id="miFlow">运行可视化</div>
+  <div class="mi" id="miDocs">浏览文档</div>
+  <div class="mi" id="miDocsEdit">编辑文档</div>
+  <div class="mi" id="miBrain">打开大脑</div>
+  <div class="mi" id="miHistory">历史记录</div>
+  <div class="mi" id="miTrain">模型训练</div>
+  <div class="mi" id="miTraining">训练中心</div>
+  <div class="mi" id="miVideo">视频通话</div>
+  <div class="msep"></div>
+  <div class="mg">高级选项</div>
+  <div class="mi has-sub">性能模式 <span>▸</span>
+    <div class="sub" id="perfSub">
+      <div class="mi" data-perf="auto">自动</div>
+      <div class="mi" data-perf="power">省电</div>
+      <div class="mi" data-perf="high">高性能</div>
+    </div>
+  </div>
+  <div class="mi has-sub">清晰度 <span>▸</span>
+    <div class="sub" id="qSub">
+      <div class="mi" data-q="auto">自动推荐（默认）</div>
+      <div class="mi" data-q="smooth">流畅 · 0.5×</div>
+      <div class="mi" data-q="std">标准 · 0.75×</div>
+      <div class="mi" data-q="hd">高清 · 1.0×</div>
+      <div class="mi" data-q="ultra">超清 · 1.5×</div>
+    </div>
+  </div>
+  <div class="mi" id="miAnim">关闭动画</div>
+  <div class="mi" id="miFps">帧率显示</div>
+  <div class="msep"></div>
+  <div class="mi danger" id="miQuit">退出</div>
+</div>
+<div id="ctl">
+  <button class="wbtn" id="bChat" title="打开/收起对话面板"><i data-icon="message-circle" class="ico"></i></button>
+  <button class="wbtn" id="bMode" title="切换到神经网络视图 (bbycroft LLM 风格)"><i data-icon="hexagon" class="ico"></i></button>
+  <button class="wbtn" id="bHide" title="隐藏大脑"><i data-icon="eye-off" class="ico"></i></button>
+  <button class="wbtn close" id="bQuit" title="退出程序"><i data-icon="x" class="ico"></i></button>
+</div>
+<!-- 快速提问浮层：菜单「快速提问…」唤起，Enter 发送并打开对话页 -->
+<div id="quickAsk">
+  <input id="qaInput" type="text" placeholder="问 wasily 点什么… (Enter 发送 / Esc 关闭)" autocomplete="off">
+  <button id="qaSend">发送</button>
+</div>
+<!-- ============ 围绕大脑的透明悬浮对话框（可拖动/缩放/全屏） ============ -->
+<!-- 思考过程框：AI 工作时自动弹出，执行完毕自动消失 -->
+<div class="bpanel" id="thinkPanel">
+  <div class="bp-hd"><span class="bp-title">🧠 思考过程</span>
+    <span class="bp-btns"><button class="bp-btn" data-act="full" title="全屏/还原">⛶</button><button class="bp-btn" data-act="close" title="关闭">×</button></span>
+  </div>
+  <div class="bp-body" id="thinkBody"><div class="bp-dim">待命…</div></div>
+  <div class="bp-grip"></div>
+</div>
+<!-- 输入框：用户提问入口 -->
+<div class="bpanel" id="inputPanel">
+  <div class="bp-hd"><span class="bp-title">✏️ 输入</span>
+    <span class="bp-btns"><button class="bp-btn" data-act="full" title="全屏/还原">⛶</button><button class="bp-btn" data-act="close" title="关闭">×</button></span>
+  </div>
+  <div class="bp-body"><textarea id="bpInput" placeholder="输入指令… (Enter 发送 / Shift+Enter 换行)"></textarea>
+    <button id="bpSend">发送</button></div>
+  <div class="bp-grip"></div>
+</div>
+<!-- 回答框：展示 AI 最终回复 -->
+<div class="bpanel" id="answerPanel">
+  <div class="bp-hd"><span class="bp-title">💬 回答</span>
+    <span class="bp-btns"><button class="bp-btn" data-act="full" title="全屏/还原">⛶</button><button class="bp-btn" data-act="close" title="关闭">×</button></span>
+  </div>
+  <div class="bp-body" id="answerBody"><div class="bp-dim">暂无回复</div></div>
+  <div class="bp-grip"></div>
+</div>
+<!-- 节点详情框：点击大脑节点后展示脑区与执行链路 -->
+<div class="bpanel" id="nodePanel">
+  <div class="bp-hd"><span class="bp-title">🔍 节点详情</span>
+    <span class="bp-btns"><button class="bp-btn" data-act="full" title="全屏/还原">⛶</button><button class="bp-btn" data-act="close" title="关闭">×</button></span>
+  </div>
+  <div class="bp-body" id="nodeBody"><div class="bp-dim">点击大脑节点查看详情</div></div>
+  <div class="bp-grip"></div>
+</div>
+
+<script>
+const SERVER = "http://127.0.0.1:8000";
+const $ = s => document.querySelector(s);
+/* 纯大脑模式（embed/float）：画布上也不绘制任何文字标签 */
+const PURE_BRAIN = document.documentElement.classList.contains('mode-embed')
+                || document.documentElement.classList.contains('mode-float');
+/* 桌面悬浮模式：真透明窗口下不绘制深蓝黑色暗云团（会在桌面投下黑团阴影） */
+const FLOAT_MODE = document.documentElement.classList.contains('mode-float');
+
+/* 宿主桥接：Electron(floatAPI, preload 注入) 与 pywebview(api) 同名方法统一调用 */
+function hostCall(name, ...args) {
+  try {
+    if (window.floatAPI && typeof window.floatAPI[name] === 'function')
+      return window.floatAPI[name](...args);
+    if (window.pywebview && window.pywebview.api
+        && typeof window.pywebview.api[name] === 'function')
+      return window.pywebview.api[name](...args);
+  } catch (e) { }
+}
+/* Electron 原生 per-pixel 透明，无需轮廓异形；pywebview 宿主才需要推送 region */
+const HOST_ELECTRON = !!(window.floatAPI && window.floatAPI.isElectron);
+
+/* ---------- pan 同步：endDrag 主进程跨屏 setBounds 后，前端调整 panX/panY
+   让大脑视觉上停在光标释放位置，而不是回到屏幕中心 ---------- */
+if (HOST_ELECTRON && window.floatAPI && typeof window.floatAPI.on_pan_sync === 'function') {
+  window.floatAPI.on_pan_sync(({ clientX, clientY }) => {
+    // Windows/Electron screen API 返回的已经是 CSS 像素，直接用
+    // setBounds 是异步 resize，需等一帧让 innerWidth/Height 更新
+    requestAnimationFrame(() => {
+      ViewState.panX = clientX - innerWidth / 2;
+      ViewState.panY = clientY - innerHeight / 2;
+      applyView();
+    });
+  });
+}
+
+function pyApi(m) { hostCall(m); }
+$('#bChat').addEventListener('click', () => pyApi('toggle_chat'));
+$('#bHide').addEventListener('click', () => pyApi('hide_brain'));
+$('#bQuit').addEventListener('click', () => pyApi('quit'));
+
+/* ---- 自动旋转开关：右键菜单「停止/开始旋转」 ---- */
+let autoRotate = localStorage.getItem('wasily.brain.autorot') !== '0';
+function toggleAutoRotate(force) {
+  autoRotate = force == null ? !autoRotate : !!force;
+  localStorage.setItem('wasily.brain.autorot', autoRotate ? '1' : '0');
+  const mi = document.getElementById('miRotAuto');
+  if (mi) mi.textContent = autoRotate ? '停止旋转' : '开始旋转';
+}
+$('#miRotAuto').addEventListener('click', () => { toggleAutoRotate(); ctxMenu.style.display = 'none'; });
+toggleAutoRotate(autoRotate);   // 应用上次保存的状态
+
+/* =====================================================================
+   wasily 大脑可视化（双视图）
+   [视图1 大脑] 真3D 神经纤维大脑，左/右脑纵裂分明，6 大功能区域：
+     左脑(逻辑)：语言理解 L1 / 逻辑推理 L2 / 工具行动 L3
+     右脑(感性)：语境感知 R1 / 创意生成 R2 / 记忆存储 R3
+   每个区域节点数量 ∝ 能力权重；与 api_server 的真实执行阶段联动：
+     prefill → 语言理解+语境感知（点亮数 ∝ 输入 token 数）
+     decode  → 逻辑推理+创意生成（点亮数 ∝ 已生成 token 数，胼胝体脉冲互通）
+     tool    → 工具行动(+逻辑推理)    memory → 记忆存储
+   每个活动区域各有流动亮点簇 —— 多个过程 = 多个区域多点移动
+   [视图2 神经网络] bbycroft.net/llm 风格：Tokens→Embedding→
+     Transformer×6(QKV/Attention/FFN/Norm)→Softmax，激活波随真实阶段流动
+   ===================================================================== */
+
+/* ---------- 真实执行阶段 → 区域激活映射 ---------- */
+const PHASE_MAP = {
+  prefill: { L1: 1.00, R1: 0.70 },                  // 理解输入
+  decode:  { L2: 0.95, R2: 1.00 },                  // 逐 token 生成
+  tool:    { L3: 1.00, L2: 0.55 },                  // 工具行动
+  memory:  { R3: 1.00, R2: 0.35 },                  // 记忆读写
+  speak:   { L1: 0.60, R2: 0.85 },                  // 组织输出
+  idle:    { }
+};
+
+/* ---------- 功能区域定义（c=中心坐标, w=能力权重→节点数, col=区域色） ---------- */
+const REGIONS = [
+  { id: 'L1', name: '语言理解', c: [-0.60,  0.10, -0.44], w: 1.0, col: [ 69, 215, 255] },
+  { id: 'L2', name: '逻辑推理', c: [ 0.00,  0.22, -0.50], w: 1.4, col: [255, 165,  64] },
+  { id: 'L3', name: '工具行动', c: [ 0.60,  0.00, -0.42], w: 0.8, col: [255,  95,  69] },
+  { id: 'R1', name: '语境感知', c: [-0.58,  0.06,  0.46], w: 0.9, col: [ 77, 232, 160] },
+  { id: 'R2', name: '创意生成', c: [ 0.02,  0.20,  0.52], w: 1.3, col: [255, 217,  77] },
+  { id: 'R3', name: '记忆存储', c: [ 0.62, -0.04,  0.44], w: 0.7, col: [196, 123, 255] },
+];
+
+/* 三态视图循环：大脑 → 神经网络 → 同屏（左脑图+右网络图） */
+const MODE_CYCLE = { brain: 'net', net: 'both', both: 'brain' };
+const MODE_UI = {
+  brain: { icon: '⬡',  tip: '切换到神经网络视图 (bbycroft LLM 风格)', w: 640,  h: 540 },
+  net:   { icon: '🧠', tip: '切换到同屏视图（大脑+神经网络）',       w: 640,  h: 540 },
+  both:  { icon: '◫',  tip: '切换到大脑视图',                        w: 1024, h: 560 },
+};
+let MODE = 'brain';
+$('#bMode').addEventListener('click', () => {
+  MODE = MODE_CYCLE[MODE];
+  const ui = MODE_UI[MODE];
+  const b = $('#bMode');
+  b.textContent = ui.icon;
+  b.title = ui.tip;
+  const f = $('#flash');
+  f.classList.remove('go'); void f.offsetWidth; f.classList.add('go');
+  // 通知桌面窗口调整尺寸（同屏模式加宽）；悬浮窗尺寸硬锁，绝不触发 resize
+  try {
+    if (!PURE_BRAIN && window.pywebview && window.pywebview.api.resize_brain)
+      window.pywebview.api.resize_brain(ui.w, ui.h);
+  } catch (e) {}
+});
+
+function createBrain3D(canvas, opts) {
+  opts = opts || {};
+  const ctx = canvas.getContext('2d');
+  const NR   = opts.rings || 46;   // 表面纬度环
+  const NS   = opts.segs  || 64;   // 每环经线段
+  const N_IN = opts.inner || 880;  // 内部纤维节点
+  const N_FL = opts.fluff || 300;  // 绒毛边缘点
+  const N_OT = opts.outer || 34;   // 外围神经丛点
+  const FX = opts.fx != null ? opts.fx : 0.42;
+  const FY = opts.fy != null ? opts.fy : 0.46;
+  const CY0 = opts.cy != null ? opts.cy : 0.52;
+  const GAP = 0.055;               // 左右脑纵裂间隙（世界单位）
+
+  // 脑廓（世界单位）：横椭球，额叶朝 -X（左）
+  const RX = 1.00, RY = 0.63, RZ = 0.58, YC = 0.06;
+
+  let W = 0, H = 0, dpr = 1;
+  let nodes = [], edges = [], dust = [], clouds = [], pulses = [];
+  let outerLinks = [];
+  let calEdges = [];               // 胼胝体（连接左右脑的纤维桥）
+  let regions = [];                // 运行时区域状态
+  let sparks = [];                 // token 火花
+  let pulsesCal = [];              // 胼胝体脉冲
+  let energy = 0.45, targetEnergy = 0.45;
+
+  // 真实执行状态（来自 api_server /agent_status）
+  let curPhase = 'idle', lastTk = 0, lastPt = 0, agentBusy = false;
+  let onlineState = true;   // 核心指示灯：模型服务在线/离线
+
+  /* ---------------- 确定性 3D value noise / fbm / ridge ---------------- */
+  function hash3(x, y, z) {
+    const s = Math.sin(x * 127.1 + y * 311.7 + z * 74.7) * 43758.5453123;
+    return s - Math.floor(s);
+  }
+  function vnoise(x, y, z) {
+    const xi = Math.floor(x), yi = Math.floor(y), zi = Math.floor(z);
+    const xf = x - xi, yf = y - yi, zf = z - zi;
+    const u = xf * xf * (3 - 2 * xf), v = yf * yf * (3 - 2 * yf), w = zf * zf * (3 - 2 * zf);
+    function h(dx, dy, dz) { return hash3(xi + dx, yi + dy, zi + dz); }
+    const c000 = h(0,0,0), c100 = h(1,0,0), c010 = h(0,1,0), c110 = h(1,1,0);
+    const c001 = h(0,0,1), c101 = h(1,0,1), c011 = h(0,1,1), c111 = h(1,1,1);
+    const x00 = c000 + (c100 - c000) * u, x10 = c010 + (c110 - c010) * u;
+    const x01 = c001 + (c101 - c001) * u, x11 = c011 + (c111 - c011) * u;
+    const y0 = x00 + (x10 - x00) * v, y1 = x01 + (x11 - x01) * v;
+    return y0 + (y1 - y0) * w;
+  }
+  function fbm(x, y, z) {
+    let s = 0, a = 0.5, f = 1;
+    for (let o = 0; o < 3; o++) { s += a * vnoise(x * f, y * f, z * f); f *= 2.03; a *= 0.5; }
+    return s;
+  }
+  function ridge(x, y, z) {
+    let s = 0, a = 0.55, f = 1.05;
+    for (let o = 0; o < 2; o++) {
+      const n = 1 - Math.abs(2 * vnoise(x * f, y * f, z * f) - 1);
+      s += a * n * n; f *= 2.11; a *= 0.5;
+    }
+    return s;
+  }
+
+  // 表面定向小凸包（额极/顶边棱角）
+  const BUMPS = [
+    { d: [-0.95, 0.22, 0.18], r: 0.10, a: 0.05 },
+    { d: [-0.40, 0.90, -0.10], r: 0.12, a: 0.045 },
+    { d: [0.28, 0.95, 0.05], r: 0.13, a: 0.04 },
+    { d: [0.82, 0.42, 0.15], r: 0.12, a: 0.045 },
+    { d: [-0.92, -0.18, -0.15], r: 0.10, a: 0.05 }
+  ];
+
+  /* ---------------- 离屏精灵 ---------------- */
+  function makeSprite(size, stops) {
+    const c = document.createElement('canvas');
+    c.width = c.height = size;
+    const g = c.getContext('2d');
+    const gr = g.createRadialGradient(size/2, size/2, 0, size/2, size/2, size/2);
+    for (const [p, col] of stops) gr.addColorStop(p, col);
+    g.fillStyle = gr; g.fillRect(0, 0, size, size);
+    return c;
+  }
+  let cloudSprite, fogSprite, warmGlow;
+
+  /* ---------------- 左右脑纵裂变换 ---------------- */
+  function splitZ(z) {
+    const hemi = z >= 0 ? 1 : -1;
+    return { z: (Math.abs(z) * 0.97 + GAP) * hemi, hemi };
+  }
+
+  /* ---------------- 构建场景 ---------------- */
+  function build() {
+    dpr = devicePixelRatio || 1;
+    W = canvas.clientWidth; H = canvas.clientHeight;
+    canvas.width = W * dpr; canvas.height = H * dpr;
+    ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
+    cloudSprite = makeSprite(96, [[0, 'rgba(8,22,46,0.60)'], [0.55, 'rgba(8,24,48,0.30)'], [1, 'rgba(8,24,48,0)']]);
+    fogSprite   = makeSprite(64, [[0, 'rgba(90,160,235,0.20)'], [0.45, 'rgba(70,140,220,0.09)'], [1, 'rgba(70,140,220,0)']]);
+    warmGlow    = makeSprite(48, [[0, 'rgba(255,190,110,0.55)'], [0.4, 'rgba(255,160,80,0.22)'], [1, 'rgba(255,150,70,0)']]);
+
+    nodes = [];
+    edges = [];
+    const addE = (a, b, t) => {
+      if (a === b) return;
+      if (t !== 3 && (nodes[a].z > 0) !== (nodes[b].z > 0)) return;  // 纤维不跨纵裂
+      edges.push([a, b, t]);
+    };
+
+    /* ---- 大脑表面：UV 椭球 + 脑沟回 + 左右半球纵裂 ---- */
+    const LAT_MAX = Math.PI / 2 - Math.PI / NR * 0.4;
+    const ringStart = [], ringN = [];
+    for (let i = 0; i < NR; i++) {
+      const lat = -LAT_MAX + 2 * LAT_MAX * i / (NR - 1);
+      const cl = Math.cos(lat), sl = Math.sin(lat);
+      const rN = Math.max(14, Math.round(NS * Math.max(Math.abs(cl), 0.20) / 2) * 2);
+      ringStart.push(nodes.length); ringN.push(rN);
+      for (let j = 0; j < rN; j++) {
+        const jL = (j + (hash3(i, j, 1.1) - 0.5) * 1.1) / rN * Math.PI * 2;
+        const latJ = lat + (hash3(i, j, 2.2) - 0.5) * (2 * LAT_MAX / NR) * 1.0;
+        const cj = Math.cos(latJ), sj = Math.sin(latJ);
+        let x = RX * cj * Math.cos(jL), y = RY * sj + YC, z = RZ * cj * Math.sin(jL);
+        let nx = x / RX, ny = (y - YC) / RY, nz = z / RZ;
+        const nl = Math.hypot(nx, ny, nz) || 1; nx /= nl; ny /= nl; nz /= nl;
+        // 脑沟回：宽起伏 + 脊状细纹
+        let e = (fbm(x * 2.6 + 11.3, y * 2.6, z * 2.6) - 0.5) * 0.17
+              + (ridge(x * 4.1 + 3.1, y * 4.1, z * 4.1) - 0.5) * 0.10;
+        // 底部云雾状下垂
+        const down = Math.max(0, -(y - YC) / RY);
+        if (down > 0.12) e += (fbm(x * 3.7 + 50, y * 5.2 + 9, z * 3.7) - 0.42) * 0.24 * down * down;
+        // 后下腹膨出
+        const hx = x - 0.62, hy = (y - YC) + 0.30, hz = z;
+        e += 0.055 * Math.exp(-(hx*hx/0.16 + hy*hy/0.10 + hz*hz/0.20));
+        // 轮廓棱角凸包
+        for (const b of BUMPS) {
+          const dot = nx * b.d[0] + ny * b.d[1] + nz * b.d[2];
+          const ang = Math.acos(Math.max(-1, Math.min(1, dot)));
+          e += b.a * Math.exp(-(ang * ang) / b.r);
+        }
+        let px = x + nx * e, py = y + ny * e, pz = z + nz * e;
+        // 左右脑纵裂：z 劈开 + 顶部纵沟下凹
+        const sp = splitZ(pz);
+        pz = sp.z;
+        const zRaw = Math.abs((z + nz * e)) / RZ;
+        const topness = Math.max(0, (py - YC) / RY);
+        if (zRaw < 0.14 && topness > 0.25) {
+          const k = (1 - zRaw / 0.14) * topness;
+          py -= 0.05 * k;
+          pz += sp.hemi * 0.02 * k;
+        }
+        nodes.push({ x: px, y: py, z: pz, hemi: sp.hemi, kind: 0,
+                     s0: hash3(i * 3.1, j * 7.7, 2.4) });
+      }
+    }
+    const NSURF = nodes.length;
+    // 表面边：同环相邻 + 跨环三角化（跨纵裂自动跳过）
+    for (let i = 0; i < NR; i++) {
+      const r0 = ringStart[i], n0 = ringN[i];
+      const r1 = i < NR - 1 ? ringStart[i + 1] : -1, n1 = i < NR - 1 ? ringN[i + 1] : 0;
+      for (let j = 0; j < n0; j++) {
+        addE(r0 + j, r0 + (j + 1) % n0, 0);
+        if (i < NR - 1) {
+          const j2f = j / n0 * n1;
+          const j2 = Math.floor(j2f), j3 = (j2 + 1) % n1;
+          addE(r0 + j, r1 + j2, 0);
+          addE(r0 + j, r1 + j3, 0);
+          if (hash3(i, j, 5.5) < 0.40) addE(r0 + j, r1 + ((j2 + 2) % n1), 0);
+          if (n0 > 20 && hash3(i, j, 7.3) < 0.15) addE(r0 + j, r0 + (j + 2) % n0, 0);
+        }
+      }
+    }
+
+    /* ---- 内部纤维节点（体积内拒绝采样，避开纵裂） ---- */
+    const innerIdx = [];
+    let guard = 0;
+    while (innerIdx.length < N_IN && guard++ < N_IN * 12) {
+      const x = -0.95 + Math.random() * 1.9;
+      const y = -0.72 + Math.random() * 1.36;
+      let z = -0.55 + Math.random() * 1.10;
+      if (Math.abs(z) < 0.05) z = (Math.random() < 0.5 ? -1 : 1) * (0.05 + Math.random() * 0.12);
+      const q = (x/RX)**2 + ((y-YC)/RY)**2 + (z/RZ)**2;
+      const hx = x - 0.45, hy = y + 0.30, hz = z;
+      const q2 = (hx/0.48)**2 + (hy/0.32)**2 + (hz/0.42)**2;
+      if (q < 0.86 || (x > 0.15 && y < 0.05 && q2 < 1)) {
+        const sp = splitZ(z);
+        innerIdx.push(nodes.length);
+        nodes.push({ x, y, z: sp.z, hemi: sp.hemi, kind: 1, s0: Math.random() });
+      }
+    }
+    // 内部-内部：最近 3 邻 + 少量贯穿长连
+    for (let a = 0; a < innerIdx.length; a++) {
+      const ni = innerIdx[a], A = nodes[ni];
+      const near = [];
+      for (let b = 0; b < innerIdx.length; b++) {
+        if (a === b) continue;
+        const B = nodes[innerIdx[b]];
+        if (B.hemi !== A.hemi) continue;
+        const d2 = (A.x-B.x)**2 + (A.y-B.y)**2 + (A.z-B.z)**2;
+        if (d2 < 0.13) near.push([b, d2]);
+      }
+      near.sort((p, q) => p[1] - q[1]);
+      for (let k = 0; k < Math.min(3, near.length); k++) addE(ni, innerIdx[near[k][0]], 1);
+      if (Math.random() < 0.30) {
+        const far = [];
+        for (let b = 0; b < innerIdx.length; b++) {
+          if (a === b) continue;
+          const B = nodes[innerIdx[b]];
+          if (B.hemi !== A.hemi) continue;
+          const d2 = (A.x-B.x)**2 + (A.y-B.y)**2 + (A.z-B.z)**2;
+          if (d2 < 0.38) far.push([b, d2]);
+        }
+        if (far.length) addE(ni, innerIdx[far[Math.random() * far.length | 0][0]], 1);
+      }
+      // 锚定到同半球最近表面点
+      let best = -1, bd = 1e9;
+      for (let s = 0; s < NSURF; s++) {
+        const B = nodes[s];
+        if (B.hemi !== A.hemi) continue;
+        const d2 = (A.x-B.x)**2 + (A.y-B.y)**2 + (A.z-B.z)**2;
+        if (d2 < bd) { bd = d2; best = s; }
+      }
+      if (best >= 0) addE(ni, best, 1);
+    }
+
+    /* ---- 绒毛边缘点 ---- */
+    const fluffIdx = [];
+    for (let k = 0; k < N_FL; k++) {
+      let u, ph;
+      if (Math.random() < 0.6) { u = -1 + Math.random() * 0.55; ph = Math.random() * Math.PI * 2; }
+      else { u = Math.random() * 2 - 1; ph = Math.random() * Math.PI * 2; }
+      const ss = Math.sqrt(1 - u * u);
+      const dx = ss * Math.cos(ph), dy = u, dz = ss * Math.sin(ph);
+      const rE = 1.02 + Math.random() * (dy < -0.35 ? 0.26 : 0.12);
+      const sp = splitZ(RZ * dz * rE);
+      fluffIdx.push(nodes.length);
+      nodes.push({ x: RX * dx * rE, y: RY * dy * rE + YC, z: sp.z, hemi: sp.hemi, kind: 2, s0: Math.random() });
+    }
+    for (let a = 0; a < fluffIdx.length; a++) {
+      const fi = fluffIdx[a], A = nodes[fi];
+      let best = -1, bd = 1e9;
+      for (let s = 0; s < NSURF; s++) {
+        const B = nodes[s];
+        if (B.hemi !== A.hemi) continue;
+        const d2 = (A.x-B.x)**2 + (A.y-B.y)**2 + (A.z-B.z)**2;
+        if (d2 < bd) { bd = d2; best = s; }
+      }
+      if (best >= 0) addE(fi, best, 2);
+    }
+    for (let a = 0; a < fluffIdx.length; a++) {
+      if (Math.random() > 0.4) continue;
+      const fi = fluffIdx[a], A = nodes[fi];
+      let best = -1, bd = 0.09;
+      for (let b = 0; b < fluffIdx.length; b++) {
+        if (a === b) continue;
+        const B = nodes[fluffIdx[b]];
+        if (B.hemi !== A.hemi) continue;
+        const d2 = (A.x-B.x)**2 + (A.y-B.y)**2 + (A.z-B.z)**2;
+        if (d2 < bd) { bd = d2; best = fluffIdx[b]; }
+      }
+      if (best >= 0) addE(fi, best, 2);
+    }
+
+    /* ---- 外围游离神经丛 ---- */
+    outerLinks = [];
+    const outIdx = [];
+    for (let k = 0; k < N_OT; k++) {
+      const u = Math.random() * 2 - 1, ph = Math.random() * Math.PI * 2;
+      const ss = Math.sqrt(1 - u * u);
+      const rE = 1.45 + Math.random() * 0.85;
+      outIdx.push(nodes.length);
+      nodes.push({
+        x: 1.15 * ss * Math.cos(ph) * rE,
+        y: 0.85 * u * rE + YC,
+        z: 0.95 * ss * Math.sin(ph) * rE,
+        hemi: 0, kind: 3, s0: Math.random()
+      });
+    }
+    for (let a = 0; a < outIdx.length; a++) {
+      const A = nodes[outIdx[a]];
+      for (let b = a + 1; b < outIdx.length; b++) {
+        const B = nodes[outIdx[b]];
+        const d2 = (A.x-B.x)**2 + (A.y-B.y)**2 + (A.z-B.z)**2;
+        if (d2 < 1.75 && Math.random() < 0.32) outerLinks.push([outIdx[a], outIdx[b]]);
+      }
+    }
+
+    /* ---- 功能区域：节点按 权重加权最近中心 归属（能力越强节点越多） ---- */
+    regions = REGIONS.map(r => ({
+      ...r, nodes: [], act: 0, target: 0.05, litT: 0, stream: null,
+      sprite: makeSprite(128, [
+        [0, `rgba(${r.col[0]},${r.col[1]},${r.col[2]},0.50)`],
+        [0.5, `rgba(${r.col[0]},${r.col[1]},${r.col[2]},0.18)`],
+        [1, `rgba(${r.col[0]},${r.col[1]},${r.col[2]},0)`]
+      ])
+    }));
+    for (let i = 0; i < nodes.length; i++) {
+      const n = nodes[i];
+      if (n.kind === 3) continue;   // 外围丛不属于功能区
+      let best = 0, bd = 1e9;
+      for (let r = 0; r < regions.length; r++) {
+        const R = regions[r];
+        const d2 = ((n.x-R.c[0])**2 + (n.y-R.c[1])**2 + (n.z-R.c[2])**2) / R.w;
+        if (d2 < bd) { bd = d2; best = r; }
+      }
+      if (n.kind !== 2) regions[best].nodes.push(i);
+    }
+
+    /* ---- 胼胝体：连接左右脑逻辑/创意区的纤维桥 ---- */
+    calEdges = [];
+    const l2n = regions[1].nodes.slice().sort((a, b) => nodes[a].s0 - nodes[b].s0).slice(0, 12).sort((a, b) => nodes[a].y - nodes[b].y);
+    const r2n = regions[4].nodes.slice().sort((a, b) => nodes[a].s0 - nodes[b].s0).slice(0, 12).sort((a, b) => nodes[a].y - nodes[b].y);
+    for (let k = 0; k < Math.min(l2n.length, r2n.length); k++) {
+      const e = [l2n[k], r2n[k], 3];
+      edges.push(e);
+      calEdges.push(e);
+    }
+
+    /* ---- 内部暗云团 ---- */
+    clouds = [];
+    for (let k = 0; k < 13; k++) {
+      const u = Math.random() * 2 - 1, ph = Math.random() * Math.PI * 2;
+      const ss = Math.sqrt(1 - u * u), rE = Math.random() ** 0.5 * 0.66;
+      const sp = splitZ(RZ * ss * Math.sin(ph) * rE);
+      clouds.push({
+        x: RX * ss * Math.cos(ph) * rE,
+        y: YC + RY * u * rE - 0.06,
+        z: sp.z,
+        r: 0.09 + Math.random() * 0.14
+      });
+    }
+
+    // 背景尘埃
+    dust = Array.from({ length: 46 }, () => ({
+      x: Math.random() * W, y: Math.random() * H,
+      vx: (Math.random() - 0.5) * 0.08, vy: (Math.random() - 0.5) * 0.08,
+      r: Math.random() * 1.4 + 0.3, a: Math.random() * 0.16 + 0.03
+    }));
+    pulses = []; sparks = []; pulsesCal = [];
+  }
+
+  /* ---------------- 交互（旋转/缩放/平移全部由全局 handler 统一处理） ----------------
+     canvas closure 不再有独立 pointerdown/move — 全局 handler 调用 Brain.setRotY() 同步 rotY */
+  let rotY = 0, rotX = 0, userRotX = null;
+  let dragging = false, lastInteract = 0;
+  /* closure 内部完全不再绑 pointerdown/move/up；全部由全局 addEventListener 统一，
+     然后全局 handler 再 Brain.setRotY/setRotX() 同步进来 */
+  addEventListener('pointerup', () => { dragging = false; });
+  /* wheel/dblclick 统一走全局 addEventListener（L1911+） */
+  addEventListener('resize', build);
+  build();
+
+  /* ---------------- 真实执行状态接入 ---------------- */
+  function spawnSpark(ri) {
+    const r = regions[ri];
+    const g = () => (Math.random() + Math.random() - 1) * 0.5;
+    sparks.push({
+      x: r.c[0] + g() * 0.22, y: r.c[1] + g() * 0.15, z: r.c[2] + g() * 0.18,
+      vy: 0.22 + Math.random() * 0.2, life: 0.8 + Math.random() * 0.5, t: 0, col: r.col
+    });
+    if (sparks.length > 40) sparks.shift();
+  }
+
+  function applyAgent(s) {
+    const T = performance.now() / 1000;
+    agentBusy = !!(s && s.state === 'thinking');
+    // 区域激活目标
+    let tg = { L1: 0.05, L2: 0.05, L3: 0.05, R1: 0.05, R2: 0.05, R3: 0.05 };
+    if (agentBusy) {
+      curPhase = s.phase || 'decode';
+      const m = PHASE_MAP[curPhase] || PHASE_MAP.decode;
+      tg = Object.assign(tg, m);
+    } else {
+      curPhase = 'idle';
+    }
+    for (const r of regions) r.target = tg[r.id];
+    if (agentBusy) {
+      const tk = s.tokens | 0, pt = s.prompt_tokens | 0;
+      // 生成：每 token 火花在 创意生成/逻辑推理 交替出现
+      if (tk > lastTk) {
+        let n = Math.min(3, tk - lastTk);
+        for (; n > 0; n--) spawnSpark((tk + n) % 2 ? 4 : 1);
+      }
+      // 输入：prefill 火花在 语言理解/语境感知
+      if (pt > lastPt) {
+        let n = Math.min(4, Math.ceil((pt - lastPt) / 8));
+        for (; n > 0; n--) spawnSpark((pt + n) % 2 ? 0 : 3);
+      }
+      lastTk = tk; lastPt = pt;
+      // 神经网络视图的激活波
+      if (curPhase === 'prefill') {
+        if (T - lastPreWave > 0.85) { spawnWave(0.5, 2.4); lastPreWave = T; }
+      } else if (tk > lastWaveTk) {
+        spawnWave(1.0, 3.4);
+        lastWaveTk = tk; outFlash = T;
+      }
+    } else {
+      lastTk = 0; lastPt = 0; lastWaveTk = 0;
+    }
+  }
+  let lastPreWave = 0, lastWaveTk = 0, outFlash = -9, lastIdleWave = 0;
+
+  /* =====================================================================
+     视图2：bbycroft.net/llm 风格神经网络
+     Tokens → Embedding → Transformer×6 (QKV/Attention/FFN/Norm) → Softmax
+     ===================================================================== */
+  const PAL = ['#7dd3fc','#c4b5fd','#fca5a5','#fdba74','#86efac','#fde68a','#a5b4fc','#f9a8d4'];
+  const PAL_RGB = PAL.map(h => [parseInt(h.slice(1,3),16), parseInt(h.slice(3,5),16), parseInt(h.slice(5,7),16)]);
+  const CELL = [70, 120, 190], ORANGE = [255, 170, 80], NEUR = [120, 185, 240];
+  let netCells = [], netNeurons = [], netTokens = [], netOut = [], netLabels = [], netWaves = [];
+  const OUT_H = [0.95, 0.45, 0.30, 0.60, 0.25, 0.50, 0.35];
+
+  function buildNet() {
+    netCells = []; netNeurons = []; netTokens = []; netOut = []; netLabels = [];
+    // 输入 token 列
+    for (let i = 0; i < 8; i++)
+      netTokens.push({ x: -2.45, y: 0.46 - i * 0.135, z: -0.06, w: 0.12, h: 0.12, ci: i % PAL.length });
+    // Embedding 矩阵 12×14
+    for (let r = 0; r < 12; r++) for (let c = 0; c < 14; c++)
+      netCells.push({ x: -1.95, y: -0.42 + r * 0.075, z: -0.42 + c * 0.062, w: 0.055, h: 0.068, kind: 'embed', ri: r });
+    // 6 个 Transformer 层
+    for (let li = 0; li < 6; li++) {
+      const x0 = -1.35 + li * 0.62;
+      for (let m = 0; m < 3; m++) for (let r = 0; r < 3; r++) for (let c = 0; c < 3; c++)
+        netCells.push({ x: x0 - 0.10, y: 0.02 + r * 0.048, z: -0.42 + m * 0.30 + c * 0.05, w: 0.042, h: 0.042, kind: 'qkv' });
+      for (let r = 0; r < 8; r++) for (let c = 0; c < 8; c++)
+        netCells.push({ x: x0 + 0.10, y: -0.13 + r * 0.062, z: -0.25 + c * 0.062, w: 0.055, h: 0.055, kind: 'attn', ri: r, ci: c });
+      for (let c = 0; c < 3; c++) for (let r = 0; r < 8; r++)
+        netNeurons.push({ x: x0 + 0.36, y: -0.12 + r * 0.066, z: -0.07 + c * 0.07 });
+      netCells.push({ x: x0 + 0.47, y: -0.40, z: -0.30, w: 0.60, h: 0.035, kind: 'norm' });
+      netLabels.push({ x: x0 + 0.18, y: -0.66, z: 0, text: String(li + 1), small: true });
+    }
+    // 输出 Softmax 条
+    for (let i = 0; i < 7; i++)
+      netOut.push({ x: 2.45, y: 0.40 - i * 0.135, z: -0.055, w: 0.11, ci: i % PAL.length });
+    netLabels.push({ x: -2.45, y: 0.72, z: 0, text: '输入 Tokens' });
+    netLabels.push({ x: -1.95, y: 0.72, z: 0, text: 'Embedding' });
+    netLabels.push({ x: -1.25, y: 0.72, z: 0, text: 'Attention ×6' });
+    netLabels.push({ x: -0.99, y: 0.50, z: 0, text: 'FFN', small: true });
+    netLabels.push({ x: 2.45, y: 0.72, z: 0, text: '输出 Softmax' });
+  }
+
+  function spawnWave(a, v) {
+    netWaves.push({ x: -2.5, v, a });
+    if (netWaves.length > 6) netWaves.shift();
+  }
+
+  const mixc = (a, b, t) => [a[0]+(b[0]-a[0])*t|0, a[1]+(b[1]-a[1])*t|0, a[2]+(b[2]-a[2])*t|0];
+
+  function pushQuad(items, x, y, z, w, h, col, a) {
+    const p1 = proj(x, y, z), p2 = proj(x, y + h, z), p3 = proj(x, y + h, z + w), p4 = proj(x, y, z + w);
+    items.push({ d: (p1.pz + p2.pz + p3.pz + p4.pz) / 4, quad: true, pts: [p1, p2, p3, p4], col, a });
+  }
+  buildNet();   // 网络场景与画布尺寸无关，初始化一次即可
+
+  function drawNet(T, dt) {
+    const items = [];
+    const waveBoost = x => {
+      let b = 0;
+      for (const w of netWaves) {
+        const d = (w.x - x) / 0.20;
+        b = Math.max(b, Math.exp(-d * d) * w.a);
+      }
+      return b;
+    };
+    const localWave = x => {
+      let l = 0;
+      for (const w of netWaves) l = Math.max(l, Math.max(0, 1 - Math.abs(w.x - x) / 0.30) * w.a);
+      return l;
+    };
+    // 输入 tokens
+    for (const t of netTokens) {
+      const pre = curPhase === 'prefill' ? 0.35 + 0.4 * Math.max(0, Math.sin(T * 6 - t.ci * 0.7)) : 0.15;
+      const b = waveBoost(t.x);
+      pushQuad(items, t.x, t.y, t.z, t.w, t.h, PAL_RGB[t.ci], Math.min(0.9, 0.30 + pre + b * 0.4));
+    }
+    // 矩阵/网格单元
+    for (const c of netCells) {
+      const b = waveBoost(c.x), shim = 0.05 + 0.04 * Math.sin(T * 0.7 + c.y * 3.1 + c.z * 2.7);
+      if (c.kind === 'embed') {
+        const rowLit = curPhase === 'prefill' ? (T * 7) % 13 : 99;
+        const rl = curPhase === 'prefill' ? Math.exp(-((c.ri - rowLit) ** 2) / 1.4) * 0.55 : 0;
+        pushQuad(items, c.x, c.y, c.z, c.w, c.h, mixc(CELL, ORANGE, Math.min(1, b + rl)),
+                 Math.min(0.9, 0.13 + shim + b * 0.8 + rl));
+      } else if (c.kind === 'attn') {
+        const lw = localWave(c.x);
+        const diag = Math.exp(-((c.ri - c.ci) ** 2) / 5) * 0.5 * lw;
+        pushQuad(items, c.x, c.y, c.z, c.w, c.h, mixc(CELL, ORANGE, Math.min(1, b * 0.9 + diag)),
+                 Math.min(0.92, 0.11 + shim + b * 0.7 + diag));
+      } else if (c.kind === 'qkv') {
+        const lw = localWave(c.x);
+        pushQuad(items, c.x, c.y, c.z, c.w, c.h, mixc(CELL, ORANGE, Math.min(1, lw * 0.8 + b * 0.5)),
+                 Math.min(0.85, 0.12 + 0.05 * Math.sin(T * 1.1 + c.y * 9) + lw * 0.6 + b * 0.4));
+      } else if (c.kind === 'norm') {
+        const lw = localWave(c.x);
+        pushQuad(items, c.x, c.y, c.z, c.w, c.h, mixc(CELL, ORANGE, lw * 0.7), Math.min(0.7, 0.14 + lw * 0.45));
+      }
+    }
+    // FFN 神经元
+    for (const n of netNeurons) {
+      const q = proj(n.x, n.y, n.z);
+      const b = waveBoost(n.x) + localWave(n.x) * 0.5;
+      const tw = 0.3 + 0.25 * Math.sin(T * 1.3 + n.y * 7 + n.z * 5);
+      items.push({ d: q.pz, dot: true, sx: q.sx, sy: q.sy, r: (0.030 + 0.022 * b) * S * q.p,
+                   col: mixc(NEUR, ORANGE, Math.min(1, b)), a: Math.min(0.95, 0.3 + tw + b) });
+    }
+    // 输出 Softmax
+    for (const o of netOut) {
+      const flash = o.ci === 0 ? Math.max(0, 1 - (T - outFlash) / 0.5) : 0;
+      const h = OUT_H[o.ci] * 0.16 * (1 + flash * 0.5);
+      pushQuad(items, o.x, o.y, o.z, o.w, h,
+               mixc(PAL_RGB[o.ci], ORANGE, flash), Math.min(0.95, 0.35 + flash * 0.6 + waveBoost(o.x) * 0.3));
+    }
+    // 深度排序绘制（远→近）
+    items.sort((a, b) => b.d - a.d);
+    for (const it of items) {
+      if (it.quad) {
+        ctx.fillStyle = `rgba(${it.col[0]},${it.col[1]},${it.col[2]},${it.a})`;
+        ctx.beginPath();
+        ctx.moveTo(it.pts[0].sx, it.pts[0].sy);
+        for (let k = 1; k < 4; k++) ctx.lineTo(it.pts[k].sx, it.pts[k].sy);
+        ctx.closePath(); ctx.fill();
+      } else {
+        ctx.fillStyle = `rgba(${it.col[0]},${it.col[1]},${it.col[2]},${it.a})`;
+        ctx.beginPath(); ctx.arc(it.sx, it.sy, it.r, 0, 7); ctx.fill();
+      }
+    }
+    // 激活波光点（沿层轴行进，带橙色雾晕拖尾）
+    netWaves = netWaves.filter(w => w.x < 2.6);
+    for (const w of netWaves) {
+      w.x += w.v * dt;
+      const q = proj(w.x, 0.12, 0), q2 = proj(w.x - 0.12, 0.12, 0);
+      const gs = 26 * q.p;
+      ctx.globalAlpha = 0.5 * w.a;
+      ctx.drawImage(warmGlow, q.sx - gs / 2, q.sy - gs / 2, gs, gs);
+      ctx.globalAlpha = 1;
+      ctx.strokeStyle = `rgba(255,190,110,${0.5 * w.a})`;
+      ctx.lineWidth = 1;
+      ctx.beginPath(); ctx.moveTo(q2.sx, q2.sy); ctx.lineTo(q.sx, q.sy); ctx.stroke();
+      ctx.fillStyle = `rgba(255,210,140,${0.85 * w.a})`;
+      ctx.beginPath(); ctx.arc(q.sx, q.sy, 2.6 * q.p, 0, 7); ctx.fill();
+    }
+    // 标签（纯大脑模式不绘制文字）
+    if (!PURE_BRAIN) {
+    ctx.textAlign = 'center';
+    for (const L of netLabels) {
+      const q = proj(L.x, L.y, L.z);
+      ctx.font = (L.small ? '9px' : '10px') + ' Consolas, monospace';
+      ctx.fillStyle = 'rgba(140,190,235,0.55)';
+      ctx.fillText(L.text, q.sx, q.sy);
+    }
+    ctx.textAlign = 'start';
+    }
+  }
+
+  /* ---------------- 主循环 ---------------- */
+  const FOCAL = 3.6;
+  let lastT = performance.now();
+  let S = 100;
+  let proj = (x, y, z) => ({ sx: 0, sy: 0, pz: 0, p: 1 });
+
+  /* ---- 同屏模式：大脑 ↔ 神经网络之间的数据流桥 ---- */
+  let bridgePulses = [];
+  function drawBridge(T, dt) {
+    const x0 = W * 0.44, x1 = W * 0.56, ymid = H * CY0;
+    const paths = [-0.16, 0, 0.16];   // 三条桥线
+    ctx.lineWidth = 0.8;
+    for (let i = 0; i < paths.length; i++) {
+      const dy = paths[i] * H * 0.55;
+      const g = ctx.createLinearGradient(x0, 0, x1, 0);
+      g.addColorStop(0, 'rgba(90,170,240,0.16)');
+      g.addColorStop(0.5, 'rgba(140,200,255,0.30)');
+      g.addColorStop(1, 'rgba(255,180,100,0.16)');
+      ctx.strokeStyle = g;
+      ctx.beginPath();
+      ctx.moveTo(x0, ymid + dy);
+      ctx.quadraticCurveTo(W * 0.5, ymid + dy * 0.3 + Math.sin(T * 0.8 + i * 2) * 6, x1, ymid + dy);
+      ctx.stroke();
+    }
+    // 脉冲点沿桥流动（思考时更密）
+    if (Math.random() < (agentBusy ? 0.25 : 0.06) && bridgePulses.length < 9) {
+      bridgePulses.push({ u: 0, i: (Math.random() * 3) | 0, sp: 0.35 + Math.random() * 0.4 });
+    }
+    bridgePulses = bridgePulses.filter(p => p.u < 1);
+    for (const p of bridgePulses) {
+      p.u += dt * p.sp;
+      const dy = paths[p.i] * H * 0.55;
+      const u = p.u, mx = W * 0.5, my = ymid + dy * 0.3 + Math.sin(T * 0.8 + p.i * 2) * 6;
+      // 二次贝塞尔取点
+      const px = (1-u)*(1-u)*x0 + 2*(1-u)*u*mx + u*u*x1;
+      const py = (1-u)*(1-u)*(ymid+dy) + 2*(1-u)*u*my + u*u*(ymid+dy);
+      const fade = Math.sin(u * Math.PI);
+      ctx.fillStyle = `rgba(190,225,255,${0.7 * fade})`;
+      ctx.beginPath(); ctx.arc(px, py, 1.7, 0, 7); ctx.fill();
+    }
+  }
+
+  // 边颜色档：type 0 表面 / 1 内部 / 2 绒毛，bin 0 远 → 3 近
+  const EDGE_COL = [
+    ['rgba(40,96,150,0.10)', 'rgba(52,118,180,0.17)', 'rgba(72,148,214,0.30)', 'rgba(104,190,244,0.55)'],
+    ['rgba(34,82,132,0.06)',  'rgba(46,106,166,0.105)','rgba(60,132,198,0.18)', 'rgba(86,170,232,0.28)'],
+    ['rgba(40,96,150,0.05)',  'rgba(52,118,180,0.09)', 'rgba(70,146,212,0.15)', 'rgba(100,186,242,0.20)']
+  ];
+
+  function updateStream(r, T, dt) {
+    if (!r.stream) {
+      const parts = [];
+      const g = () => (Math.random() + Math.random() + Math.random() - 1.5) / 1.36;
+      for (let k = 0; k < 22; k++) parts.push({
+        dx: g() * 0.10, dy: g() * 0.075, dz: g() * 0.085,
+        r: 0.8 + Math.random() * 1.6, ph: Math.random() * 7, sp: 1 + Math.random() * 2,
+        px: null, py: null, big: Math.random() < 0.2
+      });
+      r.stream = { parts, ph: Math.random() * 7, sp: 0.5 + Math.random() * 0.4, seed: Math.random() * 10 };
+    }
+    const st = r.stream, col = r.col, w = r.w;
+    const tt = T * st.sp * (0.7 + r.act * 0.6) + st.ph;
+    const cx = r.c[0] + 0.14 * w * Math.sin(tt + st.seed);
+    const cy = r.c[1] + 0.10 * w * Math.sin(tt * 0.8 + 1.7 + st.seed);
+    const cz = r.c[2] + 0.12 * w * Math.cos(tt * 1.1 + st.seed);
+    for (const p of st.parts) {
+      const b = 1 + 0.2 * Math.sin(T * 0.9 + p.ph);
+      const q = proj(cx + p.dx * b * 1.6, cy + p.dy * b, cz + p.dz * b * 1.4);
+      if (p.px !== null) {
+        ctx.strokeStyle = `rgba(${col[0]},${col[1]},${col[2]},${0.30 * r.act})`;
+        ctx.lineWidth = 0.8;
+        ctx.beginPath(); ctx.moveTo(p.px, p.py); ctx.lineTo(q.sx, q.sy); ctx.stroke();
+      }
+      p.px = q.sx; p.py = q.sy;
+      const tw = (0.5 + 0.5 * Math.sin(T * p.sp + p.ph)) * (0.5 + r.act * 0.5);
+      const dd = 0.55 + 0.45 * q.p;
+      if (p.big) {
+        // 暖雾光晕 + 亮芯（GIF 同款橙色发光簇）
+        const gs = (p.r * 7 + 8) * q.p;
+        ctx.globalAlpha = Math.min(0.6, 0.45 * tw * dd * r.act + 0.04);
+        ctx.drawImage(warmGlow, q.sx - gs / 2, q.sy - gs / 2, gs, gs);
+        ctx.globalAlpha = 1;
+        ctx.fillStyle = `rgba(${col[0]},${col[1]},${col[2]},${Math.min(1, 0.9 * tw * dd * r.act + 0.05)})`;
+        ctx.beginPath(); ctx.arc(q.sx, q.sy, p.r * 1.5 * q.p, 0, 7); ctx.fill();
+      } else {
+        ctx.fillStyle = `rgba(${col[0]},${col[1]},${col[2]},${0.75 * tw * dd})`;
+        ctx.beginPath(); ctx.arc(q.sx, q.sy, p.r * 0.6 * q.p + 0.3, 0, 7); ctx.fill();
+      }
+    }
+  }
+
+  function drawBrain(T, dt) {
+    // 尘埃
+    for (const d of dust) {
+      d.x = (d.x + d.vx + W) % W; d.y = (d.y + d.vy + H) % H;
+      ctx.fillStyle = `rgba(90,160,230,${d.a})`;
+      ctx.beginPath(); ctx.arc(d.x, d.y, d.r, 0, 7); ctx.fill();
+    }
+
+    // 全部节点投影
+    for (const n of nodes) {
+      const q = proj(n.x, n.y, n.z);
+      n.sx = q.sx; n.sy = q.sy; n.pz = q.pz; n.persp = q.p;
+    }
+    const depthBin = z => Math.max(0, Math.min(3, Math.floor((z + 0.85) / 1.7 * 4)));
+    window.__brainNodes = nodes;
+    window.__brainRegions = regions;
+
+    // 外围游离神经丛
+    ctx.lineWidth = 0.7;
+    for (const [a, b] of outerLinks) {
+      const A = nodes[a], B = nodes[b];
+      const fade = 0.04 + 0.06 * Math.sin(T * 0.5 + a) ** 2;
+      ctx.strokeStyle = `rgba(70,140,205,${fade})`;
+      ctx.beginPath(); ctx.moveTo(A.sx, A.sy); ctx.lineTo(B.sx, B.sy); ctx.stroke();
+    }
+
+    // 内部暗云团（桌面悬浮真透明模式下跳过：深蓝黑精灵会在桌面形成黑团阴影）
+    if (!FLOAT_MODE) {
+      for (const c of clouds) {
+        const q = proj(c.x, c.y, c.z);
+        const sz = c.r * 2.3 * S * q.p;
+        ctx.globalAlpha = 0.5;
+        ctx.drawImage(cloudSprite, q.sx - sz / 2, q.sy - sz / 2, sz, sz);
+        ctx.globalAlpha = 1;
+      }
+    }
+
+    // 神经纤维：按类型 + 深度分档批量 stroke
+    const paths = [[], [], []];
+    for (let t = 0; t < 3; t++) for (let b = 0; b < 4; b++) paths[t].push(new Path2D());
+    for (const [a, b, t] of edges) {
+      if (t === 3) continue;   // 胼胝体单独画
+      const A = nodes[a], B = nodes[b];
+      const bin = depthBin((A.pz + B.pz) / 2);
+      const P = paths[t][bin];
+      P.moveTo(A.sx, A.sy); P.lineTo(B.sx, B.sy);
+    }
+    ctx.lineCap = 'round';
+    // 雾气层：先用粗而极淡的线描一遍，形成沿纤维分布的蓝色柔雾（参考GIF的辉光雾感）
+    const FOG_COL = [
+      ['rgba(70,140,215,0.028)', 'rgba(80,155,230,0.040)', 'rgba(95,175,245,0.055)', 'rgba(115,200,255,0.075)'],
+      ['rgba(60,125,200,0.018)', 'rgba(70,140,215,0.028)', 'rgba(85,160,235,0.040)', 'rgba(100,185,250,0.055)'],
+      ['rgba(70,140,215,0.014)', 'rgba(80,155,230,0.022)', 'rgba(95,175,245,0.032)', 'rgba(110,195,255,0.045)']
+    ];
+    for (let t = 0; t < 3; t++) {
+      ctx.lineWidth = t === 0 ? 3.4 : 2.6;
+      for (let b = 0; b < 4; b++) {
+        ctx.strokeStyle = FOG_COL[t][b];
+        ctx.stroke(paths[t][b]);
+      }
+    }
+    // 纤维本体
+    for (let t = 0; t < 3; t++) {
+      ctx.lineWidth = t === 0 ? 0.75 : 0.6;
+      for (let b = 0; b < 4; b++) {
+        ctx.strokeStyle = EDGE_COL[t][b];
+        ctx.stroke(paths[t][b]);
+      }
+    }
+    ctx.lineWidth = 0.5;
+    ctx.strokeStyle = 'rgba(150,210,255,0.16)';
+    ctx.stroke(paths[0][3]);
+
+    // 蓝色节点亮点（批量）
+    for (let b = 0; b < 4; b++) {
+      ctx.fillStyle = ['rgba(120,185,240,0.25)','rgba(130,195,250,0.40)','rgba(150,210,255,0.6)','rgba(180,225,255,0.85)'][b];
+      ctx.beginPath();
+      for (let i = 0; i < nodes.length; i++) {
+        const n = nodes[i];
+        const prob = n.kind === 0 ? 0.34 : n.kind === 1 ? 0.12 : 0.5;
+        if (depthBin(n.pz) !== b || n.s0 > prob) continue;
+        const r = (n.kind === 2 ? 0.7 : 0.85) * n.persp;
+        ctx.moveTo(n.sx + r, n.sy);
+        ctx.arc(n.sx, n.sy, r, 0, 7);
+      }
+      ctx.fill();
+    }
+
+    // 节点蓝雾：随机节点上呼吸的柔雾团（GIF 同款雾气质感），思考时更浓
+    ctx.globalAlpha = 0.55 + energy * 0.35;
+    for (let i = 0; i < nodes.length; i += 3) {
+      const n = nodes[i];
+      if (n.kind === 3 || n.s0 > 0.42) continue;
+      const breathe = 0.5 + 0.5 * Math.sin(T * (0.4 + n.s0) + n.s0 * 20);
+      if (breathe < 0.25) continue;
+      const sz = (10 + 26 * n.s0) * n.persp * (0.6 + 0.5 * breathe);
+      ctx.drawImage(fogSprite, n.sx - sz / 2, n.sy - sz / 2, sz, sz);
+    }
+    ctx.globalAlpha = 1;
+
+    // 胼胝体纤维桥（左右脑互通，decode 时增亮）
+    const calAct = Math.max(regions[1].act, regions[4].act);
+    ctx.lineWidth = 0.7;
+    ctx.strokeStyle = `rgba(160,205,255,${0.05 + 0.24 * calAct})`;
+    ctx.beginPath();
+    for (const [a, b] of calEdges) {
+      ctx.moveTo(nodes[a].sx, nodes[a].sy); ctx.lineTo(nodes[b].sx, nodes[b].sy);
+    }
+    ctx.stroke();
+    // 胼胝体脉冲：信息在两半球间往返
+    if (calAct > 0.3 && Math.random() < 0.22 && pulsesCal.length < 8) {
+      const e = calEdges[(Math.random() * calEdges.length) | 0];
+      pulsesCal.push({ a: e[0], b: e[1], u: 0, d: Math.random() < 0.5 ? 1 : -1, sp: 0.9 + Math.random() * 0.8 });
+    }
+    pulsesCal = pulsesCal.filter(p => p.u < 1 && p.u > -0.001);
+    for (const p of pulsesCal) {
+      p.u += dt * p.sp;
+      const A = nodes[p.a], B = nodes[p.b];
+      const u = p.d === 1 ? p.u : 1 - p.u;
+      const px = A.sx + (B.sx - A.sx) * u, py = A.sy + (B.sy - A.sy) * u;
+      const fade = Math.sin(Math.max(0, Math.min(1, p.u)) * Math.PI);
+      ctx.fillStyle = `rgba(255,225,170,${0.85 * fade})`;
+      ctx.beginPath(); ctx.arc(px, py, 1.8, 0, 7); ctx.fill();
+    }
+
+    // 信号脉冲（待命时的随机火花）
+    if (pulses.length < 4 + energy * 5 && Math.random() < 0.06 + energy * 0.15) {
+      const e0 = edges[(Math.random() * edges.length) | 0];
+      if (e0[2] !== 3) pulses.push({ a: e0[0], b: e0[1], u: 0, sp: 0.5 + Math.random() * 0.9 });
+    }
+    pulses = pulses.filter(p => p.u < 1);
+    ctx.lineWidth = 1;
+    for (const p of pulses) {
+      p.u += dt * p.sp;
+      const A = nodes[p.a], B = nodes[p.b];
+      const px = A.sx + (B.sx - A.sx) * p.u;
+      const py = A.sy + (B.sy - A.sy) * p.u;
+      const fade = Math.sin(p.u * Math.PI);
+      ctx.fillStyle = `rgba(255,205,140,${0.8 * fade})`;
+      ctx.beginPath(); ctx.arc(px, py, 1.6, 0, 7); ctx.fill();
+    }
+
+    /* ---- 功能区域：激活光晕 + 点亮节点 + 流动亮点簇 + 标签 ---- */
+    for (const r of regions) {
+      r.act += (r.target - r.act) * 0.07;
+      if (r.act < 0.03) { r.stream = null; continue; }
+      const q = proj(r.c[0], r.c[1], r.c[2]);
+      const col = r.col, cs = `${col[0]},${col[1]},${col[2]}`;
+      // 区域光晕
+      const sz = (0.60 * r.w + 0.26) * S * q.p * (0.82 + 0.30 * r.act);
+      ctx.globalAlpha = Math.min(0.55, r.act * 0.5);
+      ctx.drawImage(r.sprite, q.sx - sz / 2, q.sy - sz / 2, sz, sz);
+      ctx.globalAlpha = 1;
+      // 点亮节点数 ∝ token 数（输入点亮理解区，生成点亮推理/创意区）
+      let lt;
+      if (curPhase === 'prefill' && (r.id === 'L1' || r.id === 'R1'))
+        lt = Math.min(0.85, 0.18 + lastPt * 0.012);
+      else if (curPhase === 'decode' && (r.id === 'L2' || r.id === 'R2'))
+        lt = Math.min(0.75, 0.16 + lastTk * 0.02);
+      else
+        lt = 0.45 * r.act;
+      r.litT += (Math.min(lt, 0.9) - r.litT) * 0.1;
+      ctx.fillStyle = `rgba(${cs},${0.30 + 0.35 * r.act})`;
+      ctx.beginPath();
+      for (const i of r.nodes) {
+        const n = nodes[i];
+        if (n.s0 > r.litT) continue;
+        ctx.moveTo(n.sx + 1.6 * n.persp, n.sy);
+        ctx.arc(n.sx, n.sy, 1.6 * n.persp, 0, 7);
+      }
+      ctx.fill();
+      // 流动亮点簇（每个活动区域各一群 → 多区域多点移动）
+      updateStream(r, T, dt);
+      // 区域标签（名称 + 节点数；纯大脑模式不绘制）
+      if (!PURE_BRAIN && r.act > 0.22) {
+        const a = Math.min(0.9, (r.act - 0.22) * 2);
+        ctx.font = '600 11px "Microsoft YaHei", sans-serif';
+        ctx.textAlign = 'center';
+        ctx.fillStyle = `rgba(${cs},${a})`;
+        ctx.shadowColor = `rgba(${cs},0.8)`; ctx.shadowBlur = 8;
+        ctx.fillText(`${r.name} · ${r.nodes.length}`, q.sx, q.sy - sz * 0.34);
+        ctx.shadowBlur = 0;
+        ctx.textAlign = 'start';
+      }
+    }
+
+    // token 火花（随真实 token 生成逐个迸发）
+    sparks = sparks.filter(s => s.t < s.life);
+    for (const s of sparks) {
+      s.t += dt; s.y += s.vy * dt;
+      const q = proj(s.x, s.y, s.z);
+      const a = 1 - s.t / s.life;
+      ctx.fillStyle = `rgba(${s.col[0]},${s.col[1]},${s.col[2]},${0.18 * a})`;
+      ctx.beginPath(); ctx.arc(q.sx, q.sy, 5 * q.p, 0, 7); ctx.fill();
+      ctx.fillStyle = `rgba(255,235,200,${0.85 * a})`;
+      ctx.beginPath(); ctx.arc(q.sx, q.sy, 1.8 * q.p, 0, 7); ctx.fill();
+    }
+
+    /* ---- 中心核心：一个很小的点（金色=在线 / 黑色=离线）---- */
+    const qc = proj(0, 0.02, 0);
+    const R0 = Math.max(1.3, 0.011 * S * qc.p);
+    if (onlineState) {
+      // 极淡光晕
+      const cgs = R0 * 3.2;
+      const cgrd = ctx.createRadialGradient(qc.sx, qc.sy, 0, qc.sx, qc.sy, cgs);
+      cgrd.addColorStop(0, 'rgba(255,196,70,0.42)');
+      cgrd.addColorStop(1, 'rgba(255,196,70,0)');
+      ctx.fillStyle = cgrd;
+      ctx.beginPath(); ctx.arc(qc.sx, qc.sy, cgs, 0, 7); ctx.fill();
+      ctx.fillStyle = 'rgba(255,199,64,0.98)';
+    } else {
+      ctx.fillStyle = 'rgba(0,0,0,0.92)';
+    }
+    ctx.beginPath(); ctx.arc(qc.sx, qc.sy, R0, 0, 7); ctx.fill();
+
+    // 左右脑标注（纯大脑模式不绘制）
+    if (!PURE_BRAIN) {
+      const ql = proj(-0.15, 0.80, -0.55), qr = proj(-0.15, 0.80, 0.55);
+      ctx.font = '10px "Microsoft YaHei", sans-serif';
+      ctx.textAlign = 'center';
+      ctx.fillStyle = 'rgba(120,190,255,0.40)';
+      ctx.fillText('左脑 · 逻辑', ql.sx, ql.sy);
+      ctx.fillStyle = 'rgba(255,205,140,0.40)';
+      ctx.fillText('右脑 · 感性', qr.sx, qr.sy);
+      ctx.textAlign = 'start';
+    }
+  }
+
+  let animPaused = false;  // 暂停动画以节省 CPU（对话窗口可控制）
+  let animStopped = false; // 菜单「关闭动画」：彻底停止 rAF 循环
+  let rafId = 0;
+  let lastDraw = 0;        // fps 门控用（资源策略下发帧率上限）
+  function frame(now) {
+    if (!animStopped) rafId = requestAnimationFrame(frame);  // 停止时不再排新帧
+    if (animPaused || ResPolicy.hidden) { lastT = now; return; }
+    // 帧率上限 = 资源分级策略 + 性能模式覆盖；S3 强制降级为低帧率模式
+    let fpsCap = ResPolicy.fps || 60;
+    if (perfMode === 'power') fpsCap = Math.min(fpsCap, 15);       // 省电：≤15fps
+    else if (perfMode === 'high') fpsCap = 60;                     // 高性能：拉满
+    if (ResPolicy.level === 'S3') fpsCap = Math.min(fpsCap, 8);    // S3 资源保护：低帧率
+    if (now - lastDraw < 1000 / fpsCap - 1) return;   // 帧率门控：S1=30 S2=15
+    lastDraw = now;
+    // 帧率统计：每 500ms 刷新一次帧率显示框
+    fpsFrames++;
+    if (now - fpsLast >= 500) {
+      const f = Math.round(fpsFrames * 1000 / (now - fpsLast));
+      fpsFrames = 0; fpsLast = now;
+      if (fpsOn) $('#fpsBox').textContent = `FPS ${f} · ${ResPolicy.level} · ${PERF_TEXT[perfMode]} · ${Q_NAME[qualityScale()] || ''}`;
+      watchQualityFps(f, now);
+    }
+    const dt = Math.min(0.05, (now - lastT) / 1000);
+    lastT = now;
+    // 矢量式渲染：位图密度 = 屏幕DPR × 清晰度系数（与缩放倍率无关）；
+    // 缩放经画布上下文变换实现，每帧按目标倍率重新光栅化 → 永无机位图拉伸模糊
+    const MAX_PIX = { S0: 20e6, S1: 16e6, S2: 10e6, S3: 6e6 }[ResPolicy.level] || 16e6;
+    const dprTarget = Math.min((devicePixelRatio || 1) * qualityScale(),
+                               Math.sqrt(MAX_PIX / Math.max(1, W * H)));
+    if (Math.abs(dpr - dprTarget) > 0.05) {
+      dpr = dprTarget;
+      canvas.width = W * dpr; canvas.height = H * dpr;
+    }
+    // 每帧重置基准变换并应用视图变换（等效原CSS 平移→缩放→旋转，围绕窗口中心），
+    // 线条/节点按当前倍率重新光栅化，笔画粗细随缩放等比例增长（矢量编辑器效果）
+    ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
+    energy += (targetEnergy - energy) * 0.045;
+    ctx.clearRect(0, 0, W, H);
+    const cx0 = W / 2, cy0 = H / 2;
+    ctx.translate(cx0 + ViewState.panX, cy0 + ViewState.panY);
+    if (ViewState.rot) ctx.rotate(ViewState.rot * Math.PI / 180);
+    if (ViewState.zoom !== 1) ctx.scale(ViewState.zoom, ViewState.zoom);
+    ctx.translate(-cx0, -cy0);
+    const T = now / 1000;
+
+    // 自动旋转（无操作 2.5s 后；可被「停止旋转」按钮关闭）
+    if (autoRotate && now - lastInteract > 2500) rotY += dt * (0.20 + energy * 0.20);
+    /* 暴露 3D 旋转角度（度数）给面板轨道真正 3D 跟随 */
+    const autoX = 0;   // 默认正面朝前，不再上下摆动；用户 Alt+拖动 仍可改俯仰
+    const rx = userRotX === null ? autoX : userRotX;
+    window.__brainRotY = rotY;    // 弧度
+    window.__brainRotX = rx;      // 弧度
+    window.__brainPanX = ViewState.panX;
+    window.__brainPanY = ViewState.panY;
+    const cy1 = Math.cos(rotY), sy1 = Math.sin(rotY);
+    const cx1 = Math.cos(rx), sx1 = Math.sin(rx);
+
+    const cyp = H * CY0;
+    // 布局：brain=居中 / net=居中缩小 / both=左脑右网
+    function setView(which) {
+      if (MODE === 'both') {
+        cxp = which === 'brain' ? W * 0.26 : W * 0.74;
+        S = Math.min(W * FX, H * FY) * ViewState.zoom * (which === 'brain' ? 0.58 : 0.30);
+      } else {
+        cxp = W / 2;
+        S = Math.min(W * FX, H * FY) * ViewState.zoom * (MODE === 'net' ? 0.55 : 1);
+      }
+    }
+    let cxp = W / 2;
+    setView(MODE === 'net' ? 'net' : 'brain');
+
+    function _proj(x, y, z) {
+      const x1 = x * cy1 + z * sy1;
+      const z1 = -x * sy1 + z * cy1;
+      const y2 = y * cx1 - z1 * sx1;
+      const z2 = y * sx1 + z1 * cx1;
+      const p = FOCAL / (FOCAL + z2);
+      return { sx: cxp + x1 * S * p, sy: cyp - y2 * S * p, pz: z2, p };
+    }
+    proj = _proj;
+
+    // 待命时神经网络视图的慢波
+    if (!agentBusy && MODE !== 'brain' && T - lastIdleWave > 4.5) {
+      spawnWave(0.25, 1.6); lastIdleWave = T;
+    }
+
+    if (MODE === 'brain') { setView('brain'); drawBrain(T, dt); }
+    else if (MODE === 'net') { setView('net'); drawNet(T, dt); }
+    else {
+      setView('brain'); drawBrain(T, dt);
+      drawBridge(T, dt);
+      setView('net'); drawNet(T, dt);
+    }
+  }
+  rafId = requestAnimationFrame(frame);
+  return {
+    setState(s) {
+      targetEnergy = s === 'thinking' ? 1.0 : s === 'speaking' ? 0.75 : 0.45;
+      document.body.classList.toggle('thinking', s === 'thinking');
+    },
+    setAgentState: applyAgent,
+    setOnline(v) { onlineState = !!v; },   // 中心核心：在线绿灯 / 离线红灯
+    setPaused(p) { animPaused = !!p; },
+    isPaused() { return animPaused; },
+    /* 关闭动画：取消 rAF 循环，并渲染一帧静态大脑图；重新打开时恢复循环 */
+    setStopped(st) {
+      animStopped = !!st;
+      if (animStopped) {
+        cancelAnimationFrame(rafId);
+        animPaused = false;                       // 保证下面这一帧能画出来
+        lastDraw = 0;                             // 跳过帧率门控，确保静态帧必绘
+        const savedHidden = ResPolicy.hidden; ResPolicy.hidden = false;
+        frame(performance.now());                 // 手动渲一帧静态图（不再排新帧）
+        ResPolicy.hidden = savedHidden;
+      } else {
+        lastT = performance.now(); lastDraw = 0;  // 重置时钟，避免 dt 跳变
+        rafId = requestAnimationFrame(frame);
+      }
+    },
+    isStopped() { return animStopped; },
+    /* 同步 3D 旋转（弧度） — 全局 Alt+拖动 / setRot 时调，让面板轨道和节点渲染同步 */
+    setRotY(rad) { rotY = rad; },
+    setRotX(rad) { userRotX = rad; },
+    /* 记录交互时间：2.5s 内有操作则暂停自动旋转，面板停住便于点击 */
+    noteInteract() { lastInteract = performance.now(); },
+    getRotY() { return rotY; },
+    getRotX() { return userRotX === null ? rotX : userRotX; }
+  };
+}
+
+const Brain = createBrain3D($('#brainCanvas'));
+window.setBrainPaused = (p) => Brain.setPaused(p);  // 供 agent.py 调用以暂停动画省 CPU
+window.Brain = Brain;   // 暴露给 IIFE #2 的全局 Alt+拖动 handler 同步 3D 旋转
+
+/* =====================================================================
+   视图层交互：旋转(0~360°) / 无级缩放(0.5x~32x 矢量重光栅化) / 平移 /
+   桌面窗口拖动 / 清晰度档位 / 右键菜单
+   ===================================================================== */
+const wrapEl = $('#wrap');
+const PERF_TEXT = { auto: '自动', power: '省电', high: '高性能' };
+
+/* ---------- 清晰度（分辨率档位）：默认自动推荐 = 依据本机性能评级 ----------
+   矢量式渲染：画布位图密度 = 屏幕DPR × 清晰度系数（与缩放无关），
+   缩放经画布变换每帧按目标倍率重新光栅化 → 任意倍率下线网边缘锐利如矢量图。
+   auto 按 CPU 核数/内存/GPU 型号评级选定系数并缓存；实测帧率持续偏低
+   自动降一档（带提示）。手动选固定档后持久化，不再自动调整。 */
+const Q_SCALE = { smooth: 0.5, std: 0.75, hd: 1.0, ultra: 1.5 };
+const Q_NAME  = { 0.5: '流畅', 0.75: '标准', 1: '高清', 1.5: '超清' };
+let qualityMode = localStorage.getItem('wasily.brain.quality') || 'auto';
+function autoQualityScale() {
+  const cached = +localStorage.getItem('wasily.brain.qauto');
+  if (cached) return cached;
+  let score = 0;
+  const cores = navigator.hardwareConcurrency || 4;
+  const mem = navigator.deviceMemory || 4;
+  score += cores >= 8 ? 2 : cores >= 4 ? 1 : 0;
+  score += mem >= 8 ? 2 : mem >= 4 ? 1 : 0;
+  try {
+    const gl = document.createElement('canvas').getContext('webgl');
+    const ext = gl && gl.getExtension('WEBGL_debug_renderer_info');
+    const gpu = (ext && gl.getParameter(ext.UNMASKED_RENDERER_WEBGL)) || '';
+    if (/rtx|rx [4-7]\d{3}|arc a\d|gtx 1[06]\d/i.test(gpu)) score += 2;
+    else if (/intel|uhd|iris|hd graphics/i.test(gpu)) score += 0;
+    else score += 1;
+  } catch (e) { score += 1; }
+  const s = score >= 6 ? 1.5 : score >= 4 ? 1.0 : score >= 2 ? 0.75 : 0.5;
+  localStorage.setItem('wasily.brain.qauto', s);
+  return s;
+}
+function qualityScale() {
+  return Math.min(1.5, qualityMode === 'auto' ? autoQualityScale() : (Q_SCALE[qualityMode] || 1));
+}
+let qLowSince = 0, qGraceUntil = performance.now() + 5000;
+function watchQualityFps(fps, now) {
+  if (qualityMode !== 'auto' || document.hidden || now < qGraceUntil) return;
+  if (fps >= 18) { qLowSince = 0; return; }
+  if (!qLowSince) { qLowSince = now; return; }
+  if (now - qLowSince < 4000) return;
+  qLowSince = 0; qGraceUntil = now + 10000;
+  const lower = { 1.5: 1.0, 1.0: 0.75, 0.75: 0.5 }[autoQualityScale()];
+  if (lower) {
+    localStorage.setItem('wasily.brain.qauto', lower);
+    showQToast(`本机性能不足以支撑当前清晰度，已自动降至「${Q_NAME[lower]}」`);
+  }
+}
+function showQToast(msg) {
+  let t = document.getElementById('qToast');
+  if (!t) {
+    t = document.createElement('div'); t.id = 'qToast';
+    t.style.cssText = 'position:fixed;top:14px;left:50%;transform:translateX(-50%);z-index:10001;'
+      + 'padding:7px 14px;border-radius:8px;font:12px "Microsoft YaHei";color:#cfe8ff;'
+      + 'background:rgba(8,20,38,.8);border:1px solid rgba(120,200,255,.25);'
+      + 'box-shadow:0 6px 22px rgba(0,10,30,.5);pointer-events:none;transition:opacity .4s;opacity:0';
+    document.body.appendChild(t);
+  }
+  t.textContent = msg;
+  requestAnimationFrame(() => { t.style.opacity = '1'; });
+  clearTimeout(t._h); t._h = setTimeout(() => { t.style.opacity = '0'; }, 2800);
+}
+
+/* ---------- 视图状态（缩放/旋转持久化到 localStorage） ---------- */
+const ViewState = {
+  zoom: +(localStorage.getItem('wasily.brain.zoom') || 1),  // 连续无级缩放
+  rot:  +(localStorage.getItem('wasily.brain.rot')  || 0),  // 0~360°
+  panX: 0, panY: 0,                                          // 视野平移；悬浮模式下即大脑的桌面位置
+};
+/* 悬浮（Electron）定位：覆盖层窗口铺满工作区且永不移动，
+   大脑中心 = 画布中心 + pan，故 pan 直接决定它在屏幕上的位置（CSS px），
+   zoom 只改变大小、不移动中心（缩放围绕大脑自身）。默认落在右下角，拖走后记忆位置。 */
+const FLOAT_DOM_POS   = FLOAT_MODE && HOST_ELECTRON;
+const FLOAT_ICON_ZOOM = 0.065;      // 图标态初始倍率（约 72px 级别）
+const FLOAT_ZOOM_MIN  = 0.03;       // 悬浮模式缩放下限，可缩到桌面图标大小
+const FLOAT_MARGIN    = 20;         // 距屏幕右下角留白(px)
+function floatDefaultPan() {
+  const r = 36;                     // 图标态大脑半径估算值(px)
+  return { x: innerWidth / 2 - FLOAT_MARGIN - r,
+           y: innerHeight / 2 - FLOAT_MARGIN - r };
+}
+/* 持久化位置兜底：跨屏拖动/换显示器后保存的 pan 可能把大脑画到窗口外
+   （表现为「窗口在、但什么都看不到」）——启动与窗口尺寸变化时校验，
+   大脑中心一旦落到视口外就复位到右下角 */
+function clampPanToViewport() {
+  if (!FLOAT_DOM_POS) return;
+  const m = 24;                     // 大脑中心至少要在视口内留这么多 px
+  const cx = innerWidth / 2 + ViewState.panX;
+  const cy = innerHeight / 2 + ViewState.panY;
+  if (cx < m || cx > innerWidth - m || cy < m || cy > innerHeight - m) {
+    const d = floatDefaultPan();
+    ViewState.panX = d.x; ViewState.panY = d.y;
+  }
+}
+if (FLOAT_DOM_POS) {
+  const z = +(localStorage.getItem('wasily.brain.zoom') || 0) || FLOAT_ICON_ZOOM;
+  ViewState.zoom = Math.min(32, Math.max(FLOAT_ZOOM_MIN, z));
+  // 缩放过小（只剩几个像素）等于不可见，启动时回落到图标态
+  if (ViewState.zoom < FLOAT_ICON_ZOOM * 0.8) ViewState.zoom = FLOAT_ICON_ZOOM;
+  let p = null;
+  try { p = JSON.parse(localStorage.getItem('wasily.brain.pos') || 'null'); } catch (err) { p = null; }
+  if (!p || typeof p.x !== 'number' || typeof p.y !== 'number') p = floatDefaultPan();
+  ViewState.panX = p.x; ViewState.panY = p.y;
+  clampPanToViewport();
+} else {
+  ViewState.zoom = Math.min(32, Math.max(0.5, ViewState.zoom));
+  if (Math.abs(ViewState.zoom - 1) < 0.03) { ViewState.zoom = 1; ViewState.panX = 0; ViewState.panY = 0; }
+}
+
+/* 悬浮模式：URL 参数 init_zoom_scale 可覆盖初始图标倍率（不影响用户已调整过的持久化值） */
+if (FLOAT_MODE) {
+  try {
+    const params = new URLSearchParams(location.search);
+    const initScale = parseFloat(params.get('init_zoom_scale'));
+    const hasUserZoom = localStorage.getItem('wasily.brain.zoom') !== null;
+    if (initScale && isFinite(initScale) && !hasUserZoom) {
+      ViewState.zoom = Math.min(32, Math.max(FLOAT_ZOOM_MIN, FLOAT_ICON_ZOOM * initScale));
+    }
+  } catch (err) { /* 忽略 URL 解析错误 */ }
+}
+
+let perfMode = 'auto';          // 性能模式：auto / power / high（agent.py 下发）
+let fpsOn = false;              // 帧率显示开关
+let fpsFrames = 0, fpsLast = performance.now();
+
+/* 视图持久化：缩放/平移/旋转改为画布内矢量渲染（frame() 中应用），
+   不再用 CSS transform（位图拉伸会糊），wrapEl 变换清空 */
+function applyView() {
+  wrapEl.style.transform = 'none';
+  localStorage.setItem('wasily.brain.zoom', ViewState.zoom);
+  localStorage.setItem('wasily.brain.rot', ViewState.rot);
+  if (FLOAT_DOM_POS) localStorage.setItem('wasily.brain.pos', JSON.stringify({ x: Math.round(ViewState.panX), y: Math.round(ViewState.panY) }));
+}
+function setZoom(z) {
+  const lo = FLOAT_MODE ? FLOAT_ZOOM_MIN : 0.5;   // 悬浮模式缩放下限放开，可缩到桌面图标大小
+  ViewState.zoom = Math.min(32, Math.max(lo, z));
+  if (!FLOAT_MODE && ViewState.zoom > 0.97 && ViewState.zoom < 1.03) {  // 100% 吸附复位平移（仅内嵌模式）
+    ViewState.zoom = 1; ViewState.panX = 0; ViewState.panY = 0;
+  }
+  applyView();
+  syncMenuChecks();
+  // 缩放后主动刷新 __brainR，确保 hitBrainGeom 用最新半径（下一帧 canvas 已按新 zoom 渲染）
+  if (window.__measureBrainR) setTimeout(() => { const m = window.__measureBrainR(); if (m) window.__brainR = m; }, 120);
+}
+function setRot(r, animate = true) {
+  r = ((Math.round(r) % 360) + 360) % 360;   // 1° 步进，归一化到 0~360
+  ViewState.rot = r;
+  $('#rotInput').value = r;
+  applyView(animate);
+}
+applyView(false);   // 启动时恢复上次缩放/旋转/位置
+addEventListener('resize', () => { clampPanToViewport(); applyView(false); });
+
+/* ---------- 拖动分流：Alt+拖=视图旋转；放大后拖大脑本体=平移看细节；
+   悬浮模式拖空白处（或 100% 态任意处）= 移动桌面窗口 ---------- */
+/* 命中检测：画布与窗口 1:1（无 CSS 缩放），读该点 alpha > 24 即大脑本体 */
+/* 将节点 pre-transform 坐标 forward-transform 到屏幕 CSS 像素：
+   canvas 变换链是 translate(cx0+pan, cy0+pan) → rotate → scale(zoom) → translate(-cx0, -cy0)
+   这里按相同顺序合成 */
+function nodeToScreen(sx, sy) {
+  const cx0 = innerWidth / 2, cy0 = innerHeight / 2;
+  const z = ViewState.zoom || 1;
+  const panX = ViewState.panX || 0, panY = ViewState.panY || 0;
+  const rotRad = (ViewState.rot || 0) * Math.PI / 180;
+  let dx = (sx - cx0) * z;
+  let dy = (sy - cy0) * z;
+  if (rotRad) {
+    const cos = Math.cos(rotRad), sin = Math.sin(rotRad);
+    const rx = dx * cos - dy * sin;
+    const ry = dx * sin + dy * cos;
+    dx = rx; dy = ry;
+  }
+  return { x: cx0 + panX + dx, y: cy0 + panY + dy };
+}
+/* 命中大脑节点 */
+function hitNodeAt(cx, cy) {
+  if (!window.__brainNodes || !window.__brainRegions) return null;
+  const THRESH = 14;
+  let best = null, bestD = THRESH;
+  for (const n of window.__brainNodes) {
+    if (n.pz > 0.95) continue;
+    const sp = nodeToScreen(n.sx, n.sy);
+    const d = Math.hypot(sp.x - cx, sp.y - cy);
+    if (d < bestD) { bestD = d; best = n; }
+  }
+  if (!best) return null;
+  for (const r of window.__brainRegions) {
+    if (r.nodes && r.nodes.includes(best)) return { node: best, region: r };
+  }
+  return { node: best, region: null };
+}
+function showNodeDetail(hit) {
+  const body = document.getElementById("nodeBody");
+  if (!body || !window.__nodeDetail) return;
+  const n = hit.node, r = hit.region;
+  const hemi = n.hemi === 0 ? "左脑" : "右脑";
+  const kindMap = ["皮层节点","神经胶质","白质束","核心核团"];
+  const kindName = kindMap[n.kind] || "未知";
+  let execFlow = "";
+  if (r) {
+    switch (r.id) {
+      case "L1": execFlow = "接收输入 转 分词/语义编码 转 生成向量 转 分发 L2/L3"; break;
+      case "L2": execFlow = "接收语义向量 转 Transformer 推理 转 输出结论 转 触发 L3"; break;
+      case "L3": execFlow = "接收行动触发 转 构造工具调用 转 执行 转 结果回 L1"; break;
+      case "R1": execFlow = "读上下文窗口 转 关联检索 转 语境融合 转 回写 R3"; break;
+      case "R2": execFlow = "接语义骨架 转 多模态生成 转 候选排序 转 输出"; break;
+      case "R3": execFlow = "写向量库 转 分层压缩 转 更新索引 转 下次检索命中"; break;
+      default: execFlow = "接收信号 转 计算 转 输出";
+    }
+  } else { execFlow = "支撑节点 维持脑区通信 能量供给"; }
+  const col = r ? "rgb(" + r.col.join(",") + ")" : "#888";
+  const parts = execFlow.split(" 转 ");
+  body.innerHTML = "<div class=nd-head><span class=nd-color style=background:"+col+"></span><b>"+esc(r?r.name:kindName)+"</b><span class=nd-kind>"+kindName+"</span></div>"
+    + "<div class=nd-line>🧠 "+hemi+" #"+(n.idx!=null?n.idx:"-")+" 深度 "+(n.pz||0).toFixed(2)+"</div>"
+    + "<div class=nd-exec-title>⚙ 执行链路</div>"
+    + "<div class=nd-exec>" + parts.join("<br>→ ") + "</div>";
+  window.__nodeDetail.show();
+}
+function hitBrain(x, y) {
+  const cv = document.getElementById('brainCanvas');
+  if (!cv || !cv.width) return false;
+  const px = Math.round(x * cv.width / innerWidth);
+  const py = Math.round(y * cv.height / innerHeight);
+  if (px < 0 || py < 0 || px >= cv.width || py >= cv.height) return false;
+  try { return cv.getContext('2d').getImageData(px, py, 1, 1).data[3] > 24; }
+  catch (err) { return true; }
+}
+/* 几何圆形命中：以脑心为中心，__brainR × 1.25 为半径的圆内都算"在大脑上"
+   用于拖动发起和穿透切换 —— 比像素级 hitBrain 宽容得多，线网缝隙不会导致漏判 */
+function hitBrainGeom(x, y) {
+  const r = (window.__brainR || 215);
+  const cx = innerWidth / 2 + (ViewState.panX || 0);
+  const cy = innerHeight / 2 + innerHeight * 0.02 * (ViewState.zoom || 1) + (ViewState.panY || 0);
+  return Math.hypot(x - cx, y - cy) < r * 1.25;
+}
+(function () {
+  let mode = null, sx = 0, sy = 0, sRot = 0, cx = 0, cy = 0;
+  let downX = 0, downY = 0, maybeClick = false;   // 单击检测（与拖动区分）
+  let pendingWinDrag = false;   // 延迟发起窗口拖动：pointerdown 只设模式，真正 hostCall('drag_start') 等位移>6px
+  let trackingWinDrag = false;  // 是否已真正发过 drag_start（用于配对 drag_end）
+  addEventListener('pointerdown', e => {
+    if (window.Brain) window.Brain.noteInteract();   // 有操作 → 暂停自动旋转
+    if (e.button === 2 || e.target.closest('#ctxMenu') || e.target.closest('#ctl') || e.target.closest('.bpanel') || e.target.closest('#quickAsk')) return;
+    cx = innerWidth / 2; cy = innerHeight / 2;
+    downX = e.clientX; downY = e.clientY;
+    maybeClick = FLOAT_MODE && !e.altKey && hitBrainGeom(e.clientX, e.clientY);
+    if (e.altKey) {                        // Alt+拖动 → 旋转视图
+      mode = 'rot'; sRot = ViewState.rot;
+      sx = Math.atan2(e.clientY - cy, e.clientX - cx);
+      e.preventDefault(); e.stopPropagation();
+    } else if (!FLOAT_MODE && ViewState.zoom > 1.001) {
+      mode = 'pan'; sx = e.clientX; sy = e.clientY;   // embed：放大后任意处拖动 → 平移
+      e.preventDefault(); e.stopPropagation();
+    } else if (FLOAT_MODE && hitBrainGeom(e.clientX, e.clientY)) {
+      /* Electron 悬浮模式：拖大脑 = 窗口整体迁移（跨屏自动 setBounds 吸附到光标所在屏）
+         pywebview 模式：保持 pan 画布平移（pywebview 无窗口迁移 API） */
+      mode = HOST_ELECTRON ? 'win' : 'pan';
+      if (mode === 'win') {
+        pendingWinDrag = true;               // 等位移>6px 再真正发起窗口拖动
+      } else {
+        sx = e.clientX; sy = e.clientY;
+      }
+      e.preventDefault(); e.stopPropagation();
+    }
+  }, true);
+  addEventListener('pointermove', e => {
+    if (window.Brain) window.Brain.noteInteract();   // 鼠标活动 → 暂停自动旋转
+    if (mode === 'win' && e.buttons === 0) { endDrag(); return; }  // 按键丢失兜底
+    if (maybeClick && Math.hypot(e.clientX - downX, e.clientY - downY) > 6) {
+      maybeClick = false;                  // 位移超阈值 → 判定为拖动，不再算单击
+      /* 延迟发起窗口拖动：避免 pointerdown 微抖导致窗口乱跳 */
+      if (pendingWinDrag) {
+        pendingWinDrag = false; trackingWinDrag = true;
+        hostCall('drag_start');
+        document.documentElement.classList.add('brain-dragging');
+      }
+    }
+    if (mode === 'rot') {
+      const a = Math.atan2(e.clientY - cy, e.clientX - cx);
+      const newRot = sRot + (a - sx) * 180 / Math.PI;
+      setRot(newRot, false);
+      /* 同步 3D 节点旋转 — 让面板轨道和节点渲染跟 Alt+拖动对齐
+         注意：Brain 在 IIFE #1 里定义，通过 window.Brain 暴露 */
+      if (window.Brain) window.Brain.setRotY(newRot * Math.PI / 180);
+    } else if (mode === 'pan') {
+      const lim = 10000;                   // 跨屏拖动：限位放宽到虚拟桌面级（双击复位）
+      ViewState.panX = Math.min(lim, Math.max(-lim, ViewState.panX + e.clientX - sx));
+      ViewState.panY = Math.min(lim, Math.max(-lim, ViewState.panY + e.clientY - sy));
+      sx = e.clientX; sy = e.clientY;
+      applyView();
+    }
+  });
+  function endDrag() {
+    pendingWinDrag = false;
+    document.documentElement.classList.remove('brain-dragging');
+    if (trackingWinDrag) { hostCall('drag_end'); trackingWinDrag = false; }
+    if (mode) { mode = null; applyView(); }
+  }
+  addEventListener('pointerup', e => {
+    /* 单击大脑本体（位移<6px）→ 切换悬浮输入/回答框；拖动则正常结束 */
+    if (maybeClick && e.button !== 2) {
+      maybeClick = false;
+      endDrag();
+      /* 双击后屏蔽 400ms 内的 pointerup，避免两次 toggleChat 互相打架 */
+      if (performance.now() < suppressClickUntil) return;
+      /* 先检测是否点到节点 */
+      const nHit = hitNodeAt(e.clientX, e.clientY);
+      if (nHit) { showNodeDetail(nHit); return; }
+      const anyOpen = document.querySelectorAll('.bpanel.show, #quickAsk.show').length > 0;
+      if (window.__panels && anyOpen) window.__panels.hideChat();
+      return;
+    }
+    endDrag();
+  });
+  addEventListener('pointercancel', endDrag);
+  window.__brainWinDragging = () => mode === 'pan' || mode === 'win';   // 供穿透逻辑强制接管
+})();
+
+/* ---------- Outside-click：对话面板打开时，点击面板外/大脑外区域 → 隐藏 ----------
+   Electron 悬浮模式下穿透关闭意味着鼠标在透明窗口内；此时若点击目标既不在面板里、
+   也不在大脑几何圆内，就隐藏所有对话面板（think + input + answer + nodeDetail）。 */
+addEventListener('pointerdown', e => {
+  if (e.button === 2) return;                         // 右键不管
+  if (performance.now() < suppressClickUntil) return; // 双击屏蔽期不管
+  const hasOpen = document.querySelectorAll('.bpanel.show, #quickAsk.show').length > 0;
+  if (!hasOpen) return;                               // 没有打开的面板不管
+  const inPanel = e.target.closest('.bpanel, #quickAsk, #bpInput, #ctxMenu, #ctl');
+  if (inPanel) return;                                // 点在面板内部不管
+  /* 点在面板外部：隐藏所有对话面板 */
+  if (window.__panels) window.__panels.hideChat();
+  const nd = $('#nodePanel'); if (nd && nd.classList.contains('show')) nd.classList.remove('show');
+}, true);   // 捕获阶段优先拦截，避免面板内部事件冒泡到这里
+
+/* ---------- 悬浮模式点击穿透：光标在空白处 → 鼠标事件穿透到桌面；
+   悬停大脑本体/右键菜单打开时接管鼠标。Electron setIgnoreMouseEvents(forward)
+   在穿透状态下仍转发 mousemove，可实时探测命中状态 ---------- */
+(function () {
+  let ctOn = null;
+  /* 悬停大脑的选中光环：半径≈大脑绘制半径×缩放，中心随平移/缩放视图变换 */
+  const brainRing = document.getElementById('brainHover');
+  let brainHoverOn = false, measuredR = 0, lastMeasure = 0;
+  /* 实测大脑半径：从脑心向 16 个方向扫描画布 alpha，取中位数（抗背景粒子干扰） */
+  function measureBrainRadius() {
+    const cv = document.getElementById('brainCanvas');
+    if (!cv || !cv.width) return null;
+    let data;
+    try { data = cv.getContext('2d').getImageData(0, 0, cv.width, cv.height).data; }
+    catch (err) { return null; }
+    const cw = cv.width, ch = cv.height;
+    const z = ViewState.zoom || 1;
+    /* 脑心（CSS px）→ 画布像素 */
+    const ccx = (innerWidth / 2 + ViewState.panX) * cw / innerWidth;
+    const ccy = (innerHeight / 2 + innerHeight * 0.02 * z + ViewState.panY) * ch / innerHeight;
+    const radii = [], maxR = Math.min(cw, ch) * 0.75;
+    for (let k = 0; k < 16; k++) {
+      const a = k * Math.PI / 8, dx = Math.cos(a), dy = Math.sin(a);
+      let last = 0, empty = 0;
+      for (let r = 8; r < maxR; r += 2) {
+        const px = Math.round(ccx + dx * r), py = Math.round(ccy + dy * r);
+        if (px < 0 || py < 0 || px >= cw || py >= ch) break;
+        if (data[(py * cw + px) * 4 + 3] > 24) { last = r; empty = 0; }
+        else if (++empty >= 6) break;          // 连续 12px 透明 → 已越出大脑
+      }
+      if (last > 0) radii.push(last);
+    }
+    if (!radii.length) return null;
+    radii.sort((a, b) => a - b);
+    return radii[radii.length >> 1] * innerWidth / cw;   // 换回 CSS px
+  }
+  function updateBrainRing() {
+    if (!FLOAT_MODE || !brainHoverOn) { brainRing.classList.remove('show'); return; }
+    const now = performance.now();
+    if (now - lastMeasure > 500) {           // 大脑呼吸动画，500ms 重测一次
+      lastMeasure = now;
+      const m = measureBrainRadius();
+      if (m) { measuredR = m; window.__brainR = m; }
+    }
+    const z = ViewState.zoom || 1;
+    const r = (measuredR || 215 * z) + 14;   // 实测半径 + 外圈余量
+    const rx = innerWidth / 2 + ViewState.panX;
+    const ry = innerHeight / 2 + innerHeight * 0.02 * z + ViewState.panY;   // 脑心 H*0.52 绕窗口中心缩放后的位置
+    brainRing.style.left = Math.round(rx - r) + 'px';
+    brainRing.style.top = Math.round(ry - r) + 'px';
+    brainRing.style.width = brainRing.style.height = Math.round(r * 2) + 'px';
+    brainRing.classList.add('show');
+  }
+  window.__updateBrainRing = updateBrainRing;
+  window.__measureBrainR = measureBrainRadius;
+  /* 主动初始化 __brainR：页面加载后 1.5s 测一次半径，确保用户第一次拖动时 hitBrainGeom 用的是准确值 */
+  setTimeout(() => { const m = measureBrainRadius(); if (m) { window.__brainR = m; measuredR = m; } }, 1500);
+  document.addEventListener('mouseleave', () => { brainHoverOn = false;  });
+  /* 几何检测光标是否悬停在任一可见 UI 上（面板/快速提问/角标按钮）：
+     Electron 穿透转发的 mousemove 其 target 不是面板元素，不能用 e.target 判断 */
+  function overUI(x, y) {
+    const els = document.querySelectorAll('.bpanel.show, #quickAsk.show, #ctxMenu, #ctl');
+    for (const el of els) {
+      if (el.id === 'ctxMenu' && el.style.display !== 'block') continue;
+      const r = el.getBoundingClientRect();
+      if (x >= r.left && x <= r.right && y >= r.top && y <= r.bottom) return true;
+    }
+    return false;
+  }
+  function syncMousePass(x, y) {
+    /* 拖动窗口期间强制接管鼠标；悬停大脑几何圆内 → 接管；否则穿透到桌面 */
+    const dragging = window.__brainWinDragging && window.__brainWinDragging();
+    const ui = overUI(x, y);
+    const onBrain = !ui && hitBrainGeom(x, y);
+    brainHoverOn = !dragging && onBrain && ctxMenu.style.display !== 'block';
+
+    const over = dragging || ctxMenu.style.display === 'block' || ui || onBrain;
+    const on = !over;                      // true = 穿透
+    if (on !== ctOn) { ctOn = on; hostCall('set_click_through', on); }
+  }
+  window.__syncMousePass = syncMousePass;
+  /* 右键菜单弹出 → 整窗接管鼠标，这样点屏幕任意位置都能收到事件并关掉菜单 */
+  window.__ctxMenuOpened = () => {
+    if (ctOn) { ctOn = false; hostCall('set_click_through', false); }
+  };
+  addEventListener('pointermove', e => {
+    if (!FLOAT_MODE) return;
+    syncMousePass(e.clientX, e.clientY);
+  });
+})();
+
+/* ---------- 滚轮：无级缩放 0.5x~32x（画布每帧重光栅化，任意倍率锐利） ---------- */
+addEventListener('wheel', e => {
+  if (window.Brain) window.Brain.noteInteract();   // 滚轮操作 → 暂停自动旋转
+  if (e.target.closest('#ctxMenu') || e.target.closest('.bpanel') || e.target.closest('#quickAsk')) return;
+  e.preventDefault(); e.stopPropagation();
+  setZoom(ViewState.zoom * (e.deltaY < 0 ? 1.18 : 1 / 1.18));
+}, { passive: false, capture: true });
+
+/* ---------- 双击：激活对话面板（不动 zoom，悬浮模式保持图标态） ---------- */
+let suppressClickUntil = 0;   // 双击后屏蔽两次 pointerup 触发的 toggleChat
+addEventListener('dblclick', e => {
+  console.log('[dblclick] fired! target:', e.target?.id || e.target?.tagName, '__panels:', !!window.__panels);
+  if (e.target.closest('#ctxMenu') || e.target.closest('#ctl') || e.target.closest('.bpanel') || e.target.closest('#quickAsk')) return;
+  suppressClickUntil = performance.now() + 400;   // 屏蔽后续 400ms 内的单击回调
+  /* 双击 = 开关对话：已打开则全部收起，未打开则弹出并复位视角 */
+  const anyOpen = !!document.querySelector('.bpanel.show');
+  if (anyOpen) {
+    if (window.__panels) window.__panels.hideAll();
+    else document.querySelectorAll('.bpanel.show').forEach(el => el.classList.remove('show'));
+    return;
+  }
+  /* 只复位 pan/rot，不动 zoom — Electron 悬浮模式初始是图标态(zoom=0.065)，
+     setZoom(1) 等于把大脑从 72px 放大到全屏，用户看到的就是"放大" */
+  ViewState.panX = 0; ViewState.panY = 0;
+  setRot(0);
+  if (window.__panels) {
+    window.__panels.showChat();
+  } else {
+    ['#inputPanel', '#answerPanel'].forEach(sel => {
+      const el = document.querySelector(sel); if (el) el.classList.add('show');
+    });
+  }
+}, true);
+
+/* ---------- 自定义右键菜单（禁用系统菜单） ---------- */
+const ctxMenu = $('#ctxMenu');
+let topOn = true;
+/* 功能页打开方式（系统设置 ui.page_open_mode）：browser=默认浏览器 / embed=应用内嵌窗口；
+   每次弹出菜单时刷新，保证设置改动即时生效 */
+let pageOpenMode = 'browser';
+async function refreshOpenMode() {
+  try {
+    const r = await fetch(SERVER + '/ui_config');
+    const j = await r.json();
+    pageOpenMode = j.page_open_mode === 'embed' ? 'embed' : 'browser';
+  } catch (e) { }
+}
+function openPage(p) {
+  if (pageOpenMode === 'embed') hostCall('open_page_embed', p);
+  else hostCall('open_page', p);
+}
+refreshOpenMode();
+addEventListener('contextmenu', e => {
+  e.preventDefault();
+  /* 菜单弹出前恢复完整矩形窗口，避免异形区域裁剪菜单（Electron 下为空操作） */
+  hostCall('set_shape', null);
+  refreshOpenMode();
+  ctxMenu.style.display = 'block';
+  /* 菜单期间整窗接管鼠标，点屏幕任意位置都能关闭菜单 */
+  if (window.__ctxMenuOpened) window.__ctxMenuOpened();
+  const mw = ctxMenu.offsetWidth, mh = ctxMenu.offsetHeight;
+  ctxMenu.style.left = Math.max(0, Math.min(e.clientX, innerWidth  - mw - 4)) + 'px';
+  ctxMenu.style.top  = Math.max(0, Math.min(e.clientY, innerHeight - mh - 4)) + 'px';
+});
+/* 任意位置 pointerdown 都关闭菜单（capture 阶段，避免被拖动处理器 stopPropagation 拦住） */
+addEventListener('pointerdown', e => {
+  if (ctxMenu.style.display !== 'block') return;
+  if (e.target.closest('#ctxMenu')) return;
+  ctxMenu.style.display = 'none';
+  if (window.__syncMousePass) window.__syncMousePass(e.clientX, e.clientY);
+}, true);
+addEventListener('blur', () => { ctxMenu.style.display = 'none'; });
+
+/* ---------- 桌面悬浮异形窗：按大脑轮廓裁剪窗口（仅 pywebview 回退宿主） ----------
+   Electron 宿主为 per-pixel alpha 真透明，无需裁剪，整块代码跳过。
+   把大脑画布降采样到 80x68 栅格，逐行提取连续段(runs)推给桌面端，
+   桌面端用 SetWindowRgn 将窗口裁剪为大脑剪影 —— 轮廓外完全透出桌面。
+   用 alpha 而非 RGB 判定：画布背景透明(alpha=0)，大脑暗雾精灵中心
+   alpha≈0.3，亮线接近 1.0；阈值 28 可覆盖雾+亮线同时排除背景。
+   短于 2 格的段丢弃，过滤孤立噪点。
+   菜单弹出期间暂停推送（窗口保持完整矩形），关闭后自动恢复轮廓。 */
+if (PURE_BRAIN && document.documentElement.classList.contains('mode-float') && !HOST_ELECTRON) {
+  const SH_W = 80, SH_H = 68, AL_TH = 28, MIN_RUN = 2;
+  const shCv = document.createElement('canvas');
+  shCv.width = SH_W; shCv.height = SH_H;
+  const shCx = shCv.getContext('2d', { willReadFrequently: true });
+  let shLastKey = '';
+  function pushShape() {
+    if (ctxMenu.style.display === 'block') return;
+    const src = document.getElementById('brainCanvas');
+    if (!src || !src.width) return;
+    shCx.clearRect(0, 0, SH_W, SH_H);
+    shCx.drawImage(src, 0, 0, SH_W, SH_H);
+    const d = shCx.getImageData(0, 0, SH_W, SH_H).data;
+    const rows = [];
+    for (let y = 0; y < SH_H; y++) {
+      const runs = [];
+      let rx0 = -1;
+      for (let x = 0; x < SH_W; x++) {
+        const alpha = d[(y * SH_W + x) * 4 + 3];
+        if (alpha > AL_TH && rx0 < 0) rx0 = x;
+        if (alpha <= AL_TH && rx0 >= 0) {
+          if (x - rx0 >= MIN_RUN) runs.push([rx0, x - 1]);
+          rx0 = -1;
+        }
+      }
+      if (rx0 >= 0 && SH_W - rx0 >= MIN_RUN) runs.push([rx0, SH_W - 1]);
+      rows.push(runs.length ? runs : null);
+    }
+    const key = JSON.stringify(rows);
+    if (key === shLastKey) return;
+    try {
+      window.pywebview.api.set_shape(rows);
+      shLastKey = key;   // 仅在推送成功后缓存，失败时下次重试
+    } catch (err) {}
+  }
+  setInterval(pushShape, 700);
+}
+
+function syncMenuChecks() {
+  document.querySelectorAll('#zoomSub .mi').forEach(m =>
+    m.classList.toggle('checked', Math.abs(+m.dataset.zoom - ViewState.zoom) < +m.dataset.zoom * 0.12));
+  document.querySelectorAll('#rotSub .mi[data-rot]').forEach(m =>
+    m.classList.toggle('checked', +m.dataset.rot === ViewState.rot));
+  document.querySelectorAll('#perfSub .mi').forEach(m =>
+    m.classList.toggle('checked', m.dataset.perf === perfMode));
+  document.querySelectorAll('#qSub .mi').forEach(m =>
+    m.classList.toggle('checked', m.dataset.q === qualityMode));
+  $('#miTop').classList.toggle('checked', topOn);
+  $('#miFps').classList.toggle('checked', fpsOn);
+  $('#miAnim').textContent = Brain.isStopped() ? '开启动画' : '关闭动画';
+}
+
+/* 菜单动作 */
+document.querySelectorAll('#zoomSub .mi').forEach(m =>
+  m.addEventListener('click', () => { setZoom(+m.dataset.zoom); }));
+document.querySelectorAll('#rotSub .mi[data-rot]').forEach(m =>
+  m.addEventListener('click', () => { setRot(+m.dataset.rot); }));
+$('#rotInput').addEventListener('change', e => setRot(+e.target.value));
+$('#rotInput').addEventListener('pointerdown', e => e.stopPropagation());
+$('#opRange').addEventListener('pointerdown', e => e.stopPropagation());
+$('#opRange').addEventListener('input', e => {
+  $('#opVal').textContent = e.target.value + '%';
+  hostCall('set_opacity', +e.target.value);
+});
+$('#miTop').addEventListener('click', () => {
+  topOn = !topOn;
+  hostCall('set_on_top', topOn);
+  syncMenuChecks();
+});
+$('#miChat').addEventListener('click', () => { openPage('/'); ctxMenu.style.display = 'none'; });
+/* 快速提问：浮层输入 → 发送到独立会话 brain-quick → 打开对话页查看回答 */
+(function () {
+  const qa = $('#quickAsk'), qaIn = $('#qaInput');
+  let sending = false;
+  $('#miQuickAsk').addEventListener('click', () => {
+    ctxMenu.style.display = 'none';
+    qa.classList.add('show');
+    hostCall('set_click_through', false);   // 接管鼠标，保证输入框可点
+    setTimeout(() => qaIn.focus(), 30);
+  });
+  function closeQa() { qa.classList.remove('show'); qaIn.value = ''; }
+  qaIn.addEventListener('keydown', e => {
+    if (e.key === 'Escape') closeQa();
+    if (e.key === 'Enter' && !e.isComposing && e.keyCode !== 229) sendQa();
+  });
+  $('#qaSend').addEventListener('click', sendQa);
+  async function sendQa() {
+    const q = qaIn.value.trim();
+    if (!q || sending) return;
+    sending = true;
+    $('#qaSend').textContent = '发送中…';
+    try {
+      await fetch(SERVER + '/v1/chat/completions', {
+        method: 'POST', headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          messages: [{ role: 'user', content: q }],
+          session_id: 'brain-quick', max_tool_rounds: 8
+        })
+      }).catch(() => {});
+    } finally {
+      sending = false;
+      $('#qaSend').textContent = '发送';
+      closeQa();
+      openPage('/');          // 打开对话页查看完整回答与执行过程
+    }
+  }
+})();
+$('#miChatCfg').addEventListener('click', () => { openPage('/settings'); ctxMenu.style.display = 'none'; });
+/* 功能页面组：统一经 openPage 按「打开方式」设置分流（浏览器独立页 / 应用内嵌窗口） */
+[['#miFlow', '/flowviz'], ['#miDocs', '/docs'], ['#miDocsEdit', '/docs?mode=edit'], ['#miBrain', '/brain'], ['#miHistory', '/history'], ['#miTrain', '/train'], ['#miTraining', '/training'], ['#miVideo', '/video_call']]
+  .forEach(([sel, p]) => $(sel).addEventListener('click',
+    () => { openPage(p); ctxMenu.style.display = 'none'; }));
+$('#miHide').addEventListener('click', () => { pyApi('hide_brain'); ctxMenu.style.display = 'none'; });
+/* 启动桌面大脑：POST /spawn_brain 拉起 Electron（未安装回退 pywebview），
+   服务端内建单实例保护，重复点击仅前置已有窗口；同源 fetch 任意宿主可用 */
+$('#miSpawn').addEventListener('click', () => {
+  ctxMenu.style.display = 'none';
+  fetch(SERVER + '/spawn_brain', { method: 'POST' }).catch(() => {});
+});
+$('#miQuit').addEventListener('click', () => pyApi('quit'));
+document.querySelectorAll('#perfSub .mi').forEach(m =>
+  m.addEventListener('click', () => {
+    perfMode = m.dataset.perf;
+    hostCall('set_perf_mode', perfMode);
+    syncMenuChecks();
+  }));
+document.querySelectorAll('#qSub .mi').forEach(m =>
+  m.addEventListener('click', () => setQuality(m.dataset.q)));
+function setQuality(q) {
+  qualityMode = q;
+  localStorage.setItem('wasily.brain.quality', q);
+  if (q === 'auto') localStorage.removeItem('wasily.brain.qauto');  // 重新评级
+  syncMenuChecks();
+}
+$('#miAnim').addEventListener('click', () => {
+  const st = !Brain.isStopped();
+  Brain.setStopped(st);                     // 停止 rAF 循环并定格静态大脑图
+  hostCall('set_anim', !st);
+  syncMenuChecks();
+});
+$('#miFps').addEventListener('click', () => {
+  fpsOn = !fpsOn;
+  $('#fpsBox').style.display = fpsOn ? 'block' : 'none';
+  syncMenuChecks();
+});
+
+/* ---------- 启动时从 agent.py 拉取已保存的 UI 状态 ---------- */
+addEventListener('pywebviewready', () => {
+  try {
+    window.pywebview.api.get_ui_state().then(s => {
+      if (!s) return;
+      perfMode = s.perf_mode || 'auto';
+      const op = Math.round((s.opacity ?? 1) * 100);
+      $('#opRange').value = op; $('#opVal').textContent = op + '%';
+      fpsOn = !!s.show_fps;
+      $('#fpsBox').style.display = fpsOn ? 'block' : 'none';
+      if (s.manual_pause) Brain.setStopped(true);
+      syncMenuChecks();
+    });
+  } catch (e) {}
+});
+syncMenuChecks();
+
+/* ===== 资源管理器策略（来自 /agent_status.resource，S0~S3 分级） ===== */
+const ResPolicy = { fps: 60, particles: 1.0, hidden: false, level: 'S0' };
+window.setResourcePolicy = (p) => {
+  if (!p || typeof p !== 'object') return;
+  ResPolicy.fps = p.fps ?? ResPolicy.fps;
+  ResPolicy.particles = p.particles ?? ResPolicy.particles;
+  ResPolicy.hidden = !!p.hidden;
+  ResPolicy.level = p.level || ResPolicy.level;
+  const cv = document.getElementById('brainCanvas');
+  if (cv) cv.style.visibility = ResPolicy.hidden ? 'hidden' : 'visible';
+};
+
+/* ===== 圆角（agent.py 调用）：四角黑色径向遮罩 → 颜色键透明 ===== */
+window.setBrainRadius = (r) => {
+  r = Math.max(0, Math.min(200, r | 0));
+  document.querySelectorAll('.cm').forEach(e => e.remove());
+  if (!r) return;
+  const corners = [
+    ['top:0;left:0;', '100% 100%'],
+    ['top:0;right:0;', '100% 0%'],
+    ['bottom:0;left:0;', '0% 100%'],
+    ['bottom:0;right:0;', '0% 0%'],
+  ];
+  for (const [pos, at] of corners) {
+    const d = document.createElement('div');
+    d.className = 'cm';
+    d.style.cssText = `position:fixed;${pos}width:${r}px;height:${r}px;` +
+      `pointer-events:none;z-index:9999;background:radial-gradient(circle at ${at}, transparent ${r - 1}px, #000 ${r}px)`;
+    document.body.appendChild(d);
+  }
+};
+
+/* ==================== 状态轮询（大脑与真实执行过程联动） ==================== */
+const statusEl = $('#status'), statusText = $('#statusText');
+function setStatus(text, cls) {
+  statusText.textContent = text;
+  statusEl.className = cls || '';
+  // 仅 thinking 提升能量；待命/离线都回落到 idle（原先把待命错映射成 speaking）
+  Brain.setState(cls === 'busy' ? 'thinking' : 'idle');
+  Brain.setOnline(cls !== 'err');   // 中心核心同步在线状态
+}
+
+const PHASE_TEXT = {
+  prefill: s => `理解输入 · ${s.prompt_tokens || 0} tokens`,
+  decode:  s => `生成中 · 第 ${s.tokens || 0} 个 token`,
+  tool:    s => `执行工具 · ${s.tool || ''}`,
+  memory:  s => `读写记忆 · ${s.tool || ''}`
+};
+
+let pollDelay = 1000, pollInflight = false;   // 基础轮询间隔；出错指数退避；单飞防堆积
+async function poll() {
+  if (pollInflight) { setTimeout(poll, pollDelay); return; }
+  pollInflight = true;
+  try {
+    const r = await fetch(SERVER + '/agent_status');
+    const s = await r.json();
+    Brain.setAgentState(s);
+    if (window.__panels) window.__panels.onStatus(s);   // 驱动思考/回答悬浮框
+    if (s.resource) window.setResourcePolicy(s.resource);   // 应用资源分级策略
+    if (s.state === 'thinking') {
+      const f = PHASE_TEXT[s.phase || 'decode'];
+      setStatus(f ? f(s) : '思考中' + (s.tool ? ' · ' + s.tool : ''), 'busy');
+    } else {
+      const lv = s.resource && s.resource.level;
+      setStatus(lv === 'manual' ? '大脑已休眠(资源保护)' : '待命中', '');
+    }
+    pollDelay = 1000;   // 成功 → 恢复基础间隔
+  } catch (e) {
+    Brain.setAgentState(null);
+    setStatus('模型服务离线', 'err');
+    pollDelay = Math.min(pollDelay * 2, 15000);   // 出错 → 退避（最大 15s）
+  } finally { pollInflight = false; }
+  setTimeout(poll, pollDelay);
+}
+/* ============ 大脑悬浮对话框系统（思考/输入/回答，可拖·缩放·全屏） ============ */
+const __panels = (function () {
+  function esc(s) {
+    return String(s == null ? '' : s).replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
+  }
+  let orbitDirty = false;   // 面板刚显示/需重新轨道定位时置 true
+  function makePanel(sel, pos, anchor) {
+    const el = $(sel);
+    if (!el) return null;   // 缺元素只跳过该面板，不再拖垮整个对话框系统
+    el.style.left = pos.x + 'px'; el.style.top = pos.y + 'px';
+    el.style.width = pos.w + 'px'; el.style.height = pos.h + 'px';
+    let savedRect = null;
+    /* 点击面板：该面板转正对屏幕（其余面板恢复轨道角度） */
+    el.addEventListener('pointerdown', () => setFace(anchor), true);
+    /* 标题栏拖动（拖动即脱离轨道，变为自由悬浮） */
+    el.querySelector('.bp-hd').addEventListener('pointerdown', e => {
+      if (e.target.closest('.bp-btn') || e.button === 2) return;
+      if (el.classList.contains('full')) return;      // 全屏时不拖
+      if (anchor) anchor.anchored = false;
+      try { el.setPointerCapture(e.pointerId); } catch (err) {}
+      const sx = e.clientX, sy = e.clientY, ox = el.offsetLeft, oy = el.offsetTop;
+      function mv(ev) {
+        el.style.left = Math.max(0, Math.min(innerWidth - 60, ox + ev.clientX - sx)) + 'px';
+        el.style.top = Math.max(0, Math.min(innerHeight - 40, oy + ev.clientY - sy)) + 'px';
+      }
+      function up() {
+        removeEventListener('pointermove', mv, true);
+        removeEventListener('pointerup', up, true);
+      }
+      addEventListener('pointermove', mv, true);
+      addEventListener('pointerup', up, true);
+      e.preventDefault(); e.stopPropagation();
+    }, true);
+    /* 右下角握把缩放 */
+    el.querySelector('.bp-grip').addEventListener('pointerdown', e => {
+      if (el.classList.contains('full')) return;
+      try { el.setPointerCapture(e.pointerId); } catch (err) {}
+      const sx = e.clientX, sy = e.clientY, ow = el.offsetWidth, oh = el.offsetHeight;
+      function mv(ev) {
+        el.style.width = Math.max(220, ow + ev.clientX - sx) + 'px';
+        el.style.height = Math.max(130, oh + ev.clientY - sy) + 'px';
+      }
+      function up() {
+        removeEventListener('pointermove', mv, true);
+        removeEventListener('pointerup', up, true);
+      }
+      addEventListener('pointermove', mv, true);
+      addEventListener('pointerup', up, true);
+      e.preventDefault(); e.stopPropagation();
+    }, true);
+    /* 全屏 / 关闭按钮 + 重新吸附（📌） */
+    if (anchor) {
+      const pin = document.createElement('button');
+      pin.className = 'bp-btn'; pin.dataset.act = 'pin'; pin.title = '重新吸附到大脑轨道';
+      pin.textContent = '📌';
+      el.querySelector('.bp-btns').prepend(pin);
+    }
+    el.querySelectorAll('.bp-btn').forEach(b => b.addEventListener('click', e => {
+      e.stopPropagation();
+      if (b.dataset.act === 'full') {
+        if (el.classList.contains('full')) {
+          el.classList.remove('full');
+          if (savedRect) Object.assign(el.style, savedRect);
+        } else {
+          savedRect = { left: el.style.left, top: el.style.top, width: el.style.width, height: el.style.height };
+          el.classList.add('full');
+          el.style.transform = ''; el.style.opacity = ''; el.style.zIndex = 9999;   // 全屏时清除轨道投影
+        }
+      } else if (b.dataset.act === 'close') {
+        el.classList.remove('show');
+      } else if (b.dataset.act === 'pin' && anchor) {
+        anchor.anchored = true;      // 下一帧轨道更新会自动吸附回大脑周围
+      }
+    }));
+    return {
+      el,
+      show() { el.classList.add('show'); orbitDirty = true; },   // 显示后立即轨道重定位
+      hide() { el.classList.remove('show'); },
+      toggle() { el.classList.toggle('show'); orbitDirty = true; },
+      visible() { return el.classList.contains('show'); }
+    };
+  }
+
+  /* 思考 token 计数：显示在大脑正下方 */
+  const tokHud = document.getElementById('tokHud');
+  function placeTokHud() {
+    if (!tokHud) return;
+    const z = ViewState.zoom || 1;
+    const bcx = innerWidth / 2 + (ViewState.panX || 0);
+    const bcy = innerHeight / 2 + innerHeight * 0.02 * z + (ViewState.panY || 0);
+    tokHud.style.left = Math.round(bcx) + 'px';
+    tokHud.style.top  = Math.round(bcy + (window.__brainR || 215 * z) + 20) + 'px';
+  }
+  function setTokHud(on, n) {
+    if (!tokHud) return;
+    if (!on) { tokHud.classList.remove('show'); return; }
+    tokHud.textContent = '思考中 · ' + (n || 0).toLocaleString() + ' tokens';
+    tokHud.classList.add('show');
+    placeTokHud();
+  }
+
+  const cx = innerWidth / 2, cy = innerHeight / 2;
+  /* 每个面板在环绕大脑的 3D 圆环上的相位角（0°=正后，90°=右，180°=正前，270°=左）
+     四个相位相差 90°：任一时刻分居环的上/右/下/左，随大脑自转各自沿圆弧前进 */
+  const aThink = { angle: 270, anchored: true };   // 左
+  const aAnswer = { angle: 90, anchored: true };   // 右
+  const aInput = { angle: 180, anchored: true };   // 正前（近端，下沉）
+  const aNode  = { angle: 0,   anchored: true };   // 正后（远端，抬高）
+  const think = makePanel('#thinkPanel', { x: Math.max(10, cx - 500), y: Math.max(10, cy - 170), w: 310, h: 220 }, aThink);
+  const answer = makePanel('#answerPanel', { x: Math.min(innerWidth - 340, cx + 190), y: Math.max(10, cy - 150), w: 330, h: 240 }, aAnswer);
+  const input = makePanel('#inputPanel', { x: cx - 170, y: Math.min(innerHeight - 210, cy + 230), w: 350, h: 150 }, aInput);
+  /* 节点详情面板（点击节点触发） */
+  const nodeDetail = makePanel('#nodePanel', { x: cx + 150, y: cy - 200, w: 260, h: 200 }, aNode);
+  const orbiters = [
+    { p: think, a: aThink }, { p: answer, a: aAnswer },
+    { p: input, a: aInput }, { p: nodeDetail, a: aNode }
+  ].filter(o => o.p);
+
+  /* 点击某个面板 → 只有它转正对屏幕（rotY 平滑归 0）；点面板外任意位置恢复轨道角度 */
+  function setFace(target) {
+    for (const { a } of orbiters) a.facing = (a === target);
+    orbitDirty = true;
+  }
+  addEventListener('pointerdown', e => {
+    if (!e.target.closest || !e.target.closest('.bpanel')) setFace(null);
+  }, true);
+
+  /* ---- 三维环绕轨道：面板挂在绕大脑的倾斜圆环上，绕 Y 轴逆时针公转 ----
+     环面相对水平面倾斜 TILT 角（远端抬高、近端下沉）→ 投影成椭圆而不是左右平推；
+     位置用与画布 _proj 一致的透视投影（近大远小），面板本体不翻转、始终正立可读 */
+  const FOCAL_P = 3.6;                     // 与画布 FOCAL 一致
+  const TILT = 32 * Math.PI / 180;         // 环面倾角
+  const TILT_S = Math.sin(TILT);
+  const NEAR_K = FOCAL_P / (FOCAL_P - 1);  // 近端（z=-1）放大系数 ≈1.385
+  const FAR_K  = FOCAL_P / (FOCAL_P + 1);  // 远端（z=+1）缩小系数 ≈0.783
+  let _lastRy = null, _lastRx = null, _lastVrot = null;
+  let _lastPanX = null, _lastPanY = null, _lastZoom = null, _lastR = null;
+  let faceAnim = false;    // 面板「转正对屏幕」的偏航还在补间中
+  function orbitTick() {
+    requestAnimationFrame(orbitTick);
+    const ry = window.__brainRotY || 0;                   // 大脑自转角（弧度）
+    const rx = window.__brainRotX || 0;                   // 俯仰（Alt+拖动）
+    const vrot = (ViewState.rot || 0) * Math.PI / 180;    // 右键「旋转」的整体转角
+    if (!orbitDirty && !faceAnim && ry === _lastRy && rx === _lastRx && vrot === _lastVrot
+        && ViewState.panX === _lastPanX && ViewState.panY === _lastPanY
+        && ViewState.zoom === _lastZoom && window.__brainR === _lastR) return;
+    orbitDirty = false;
+    _lastRy = ry; _lastRx = rx; _lastVrot = vrot;
+    _lastPanX = ViewState.panX; _lastPanY = ViewState.panY;
+    _lastZoom = ViewState.zoom; _lastR = window.__brainR;
+
+    const z = ViewState.zoom || 1;
+    const bcx = innerWidth / 2 + ViewState.panX;
+    const bcy = innerHeight / 2 + innerHeight * 0.02 * z + ViewState.panY;   // 与画布脑心对齐
+    if (!window.__brainR && window.__measureBrainR) window.__brainR = window.__measureBrainR() || 0;
+    const brainR = window.__brainR || 250 * z;
+    /* 轨道半径：脑半径外再留出一整块面板机身；再按视口上下/左右余量收口，
+       保证近端（下方放大）与远端（上方抬高）都不会顶到窗口边而卡住不动 */
+    const hxMax = 210, hyMax = 150;
+    const roomX = innerWidth / 2 - hxMax - 12;
+    const roomY = Math.min((innerHeight - bcy - hyMax - 12) / (TILT_S * NEAR_K),
+                           (bcy - hyMax - 12) / (TILT_S * FAR_K));
+    const ringR = Math.max(brainR + 110,
+      Math.min(brainR + 260, roomX, roomY, Math.min(innerWidth, innerHeight) * 0.5));
+    const cx1 = Math.cos(rx), sx1 = Math.sin(rx);
+    const cvr = Math.cos(vrot), svr = Math.sin(vrot);
+    placeTokHud();
+
+    faceAnim = false;
+    for (const { p, a } of orbiters) {
+      if (!a.anchored || !p.visible() || p.el.classList.contains('full')) continue;
+      /* 方位角 − 大脑自转角：面板绕 Y 轴逆时针公转（屏幕观感 上→左→下→右） */
+      const ae = a.angle * Math.PI / 180 - ry;
+      const wx = Math.sin(ae), wz = Math.cos(ae);
+      const wy = TILT_S * wz;                       // 环面倾斜：远端(z>0)抬高、近端(z<0)下沉
+      const y2 = wy * cx1 - wz * sx1;               // 俯仰（与画布 _proj 同款）
+      const z2 = wy * sx1 + wz * cx1;
+      const persp = FOCAL_P / (FOCAL_P + z2);       // 近大远小
+      let dx = wx * ringR * persp;
+      let dy = -y2 * ringR * persp;
+      if (vrot) {                                   // 整体视图旋转
+        const t = dx * cvr - dy * svr;
+        dy = dx * svr + dy * cvr; dx = t;
+      }
+      const frontness = Math.max(0, Math.min(1, (1 - z2) / 2));   // 1=最近 0=最远
+      const sc = Math.max(0.80, Math.min(1.18, persp));
+      const op = 0.58 + 0.42 * frontness;           // 转到背面变暗（不翻面，文字始终可读）
+
+      /* 面板始终垂直立着：偏航角 = 轨道方位角的真实物理映射（正前 0°、侧面 ±72°），
+         与相机拍到的环绕物体一致——转到侧面时几乎侧视、明显变窄；正前正后正对屏幕；
+         点击过的面板目标偏航为 0（正对屏幕），用缓动补间过去 */
+      const rotYTarget = a.facing ? 0 : 72 * Math.sin(ae);
+      if (a._rotY == null) a._rotY = rotYTarget;
+      a._rotY += (rotYTarget - a._rotY) * 0.18;
+      if (Math.abs(rotYTarget - a._rotY) < 0.05) a._rotY = rotYTarget;
+      else faceAnim = true;
+      const rotY = a._rotY;
+
+      const pw = p.el.offsetWidth, ph = p.el.offsetHeight;
+      const hx = Math.min(pw, innerWidth - 16) * sc / 2;
+      const hy = Math.min(ph, innerHeight - 16) * sc / 2;
+      /* 保底：只有转到脑球「后方」的面板才沿半径顶到球外，避免遮住脑体；
+         转到前方（近端）的面板本来就该压在脑体之上，这样近大远小才成立 */
+      const len = Math.hypot(dx, dy);
+      const ux = len > 0.5 ? dx / len : 0;
+      const uy = len > 0.5 ? dy / len : (dy >= 0 ? 1 : -1);
+      const need = brainR + Math.abs(ux) * hx + Math.abs(uy) * hy + 14;
+      if (z2 > 0 && len < need) { dx = ux * need; dy = uy * need; }
+
+      const sx = Math.max(hx + 8, Math.min(innerWidth - hx - 8, bcx + dx));
+      const sy = Math.max(hy + 8, Math.min(innerHeight - hy - 8, bcy + dy));
+      p.el.style.left = Math.round(sx) + 'px';
+      p.el.style.top  = Math.round(sy) + 'px';
+      p.el.style.transform = 'perspective(900px) translate(-50%,-50%) '
+        + 'rotateY(' + rotY.toFixed(1) + 'deg) scale(' + sc.toFixed(3) + ')';
+      p.el.style.opacity = op.toFixed(2);
+      p.el.style.zIndex  = String(Math.round(8900 + 600 * frontness));
+      p.el.style.display = '';
+      p.el.style.pointerEvents = '';
+    }
+  }
+  orbitTick();
+window.__nodeDetail = nodeDetail;
+
+  let thinkHideTimer = null, pending = false, liveLine = null;
+
+  /* 思考框：忙碌时自动弹出，闲下来 3s 后自动消失 */
+  function onStatus(s) {
+    if (!s) return;
+    if (s.state === 'thinking') {
+      if (thinkHideTimer) { clearTimeout(thinkHideTimer); thinkHideTimer = null; }
+      think.show();
+      const f = PHASE_TEXT[s.phase || 'decode'];
+      const nTok = s.turn_gen_tokens || s.tokens || 0;   // 本轮累计（多轮工具循环相加）
+      const txt = (f ? f(s) : '思考中') + (nTok ? ' · 本轮 ' + nTok + ' tok' : '');
+      if (!liveLine || !liveLine.isConnected) {
+        liveLine = document.createElement('div');
+        liveLine.className = 't-step';
+        $('#thinkBody').appendChild(liveLine);
+      }
+      liveLine.textContent = '⏳ ' + txt;
+      const tb = $('#thinkBody'); tb.scrollTop = tb.scrollHeight;
+      setTokHud(true, nTok);
+    } else {
+      setTokHud(false);
+      if (!pending && think.visible() && !thinkHideTimer) {
+        if (liveLine) { liveLine.remove(); liveLine = null; }
+        thinkHideTimer = setTimeout(() => { think.hide(); thinkHideTimer = null; }, 3000);
+      }
+    }
+  }
+
+  /* 请求完成：思考步骤 → 微信式气泡，整体折叠进回答面板底部可展开区 */
+  function onDone(data) {
+    pending = false;
+    if (liveLine) { liveLine.remove(); liveLine = null; }
+    const steps = (data && data.steps) || [];
+    /* 渲染为微信式气泡（思考=紫色左侧气泡，工具=灰色中间胶囊） */
+    const tb = $('#thinkBody');
+    let html = '';
+    let idx = 0;
+    steps.forEach(st => {
+      idx++;
+      if (st.think) {
+        html += '<div class="tb-left"><span class="tb-idx">💭' + idx + '</span>'
+             + '<span class="tb-bubble tb-think">' + esc(String(st.think).slice(0, 400)) + '</span></div>';
+      } else if (st.tool) {
+        html += '<div class="tb-capsule"><span class="tb-toolname">⚙ ' + esc(st.tool) + '</span></div>';
+      }
+    });
+    tb.innerHTML = html || '<div class="bp-dim">本轮无工具调用</div>';
+    /* 移入回答面板底部折叠区 */
+    const reply = data && data.choices && data.choices[0] && data.choices[0].message && data.choices[0].message.content;
+    const ab = $('#answerBody');
+    if (reply) {
+      ab.textContent = reply;
+    }
+    /* 把 thinkBody 的气泡内容整体搬到回答面板底部折叠区 */
+    if (steps.length) {
+      let fold = $('#answerBody .thoughts-fold');
+      if (!fold) {
+        fold = document.createElement('div');
+        fold.className = 'thoughts-fold';
+        fold.innerHTML = '<div class="tf-hd">🧠 思考过程 · ' + idx + ' 步 <span class="tf-arrow">›</span></div>'
+                      + '<div class="tf-body" style="display:none"></div>';
+        ab.appendChild(fold);
+        fold.querySelector('.tf-hd').addEventListener('click', () => {
+          const b = fold.querySelector('.tf-body');
+          const open = b.style.display !== 'none' && b.style.display !== '';
+          b.style.display = open ? 'none' : 'block';
+          fold.classList.toggle('open', !open);
+        });
+      }
+      fold.querySelector('.tf-body').innerHTML = tb.innerHTML;   // 复制气泡到折叠区
+      if (thinkHideTimer) clearTimeout(thinkHideTimer);
+      think.hide();               // 思考框立即收起
+    }
+    answer.show();
+  }
+
+  /* 输入框发送 */
+  async function send() {
+    const q = $('#bpInput').value.trim();
+    if (!q || pending) return;
+    pending = true;
+    $('#bpInput').value = '';
+    $('#thinkBody').innerHTML = '<div class="bp-dim">已发送，等待模型响应…</div>';
+    liveLine = null;
+    think.show();
+    hostCall('set_click_through', false);
+    try {
+      const r = await fetch(SERVER + '/v1/chat/completions', {
+        method: 'POST', headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          messages: [{ role: 'user', content: q }],
+          session_id: 'brain-panels', max_tool_rounds: 8
+        })
+      });
+      const data = await r.json();
+      onDone(data);
+    } catch (e) {
+      pending = false;
+      $('#answerBody').textContent = '请求失败：' + (e && e.message ? e.message : e);
+      answer.show();
+      think.hide();
+    }
+  }
+  $('#bpSend').addEventListener('click', send);
+  $('#bpInput').addEventListener('keydown', e => {
+    Brain.noteInteract();   // 打字期间暂停自动旋转，面板停住
+    if (e.key === 'Enter' && !e.shiftKey && !e.isComposing && e.keyCode !== 229) { e.preventDefault(); send(); }
+  });
+
+  return {
+    onStatus, onDone,
+    /* 打开对话面板（无条件显示） */
+    showChat() { input.show(); answer.show(); $('#bpInput').focus(); },
+    /* 切换输入+回答框 */
+    toggleChat() {
+      const willShow = !input.visible();
+      if (willShow) { input.show(); answer.show(); $('#bpInput').focus(); }
+      else { input.hide(); }
+    },
+    hideChat() { input.hide(); answer.hide(); },
+    /* 收起全部对话面板（双击大脑隐藏对话） */
+    hideAll() { think.hide(); input.hide(); answer.hide(); nodeDetail.hide(); }
+  };
+})();
+window.__panels = __panels;
+
+poll();
+</script>
+</body>
+</html>

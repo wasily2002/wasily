@@ -1,0 +1,16 @@
+# 1. 安装依赖
+npm install
+
+# 2. 创建 R2 桶
+wrangler r2 bucket create font-assets
+
+# 3. 同步字体文件到 R2
+npm run sync
+# 然后按清单上传（或集成到 CI）
+
+# 4. 本地测试
+npm run dev
+# 访问 http://localhost:8787/css2?family=Noto+Sans+SC:wght@400;700&display=swap
+
+# 5. 部署到 Cloudflare
+npm run deploy

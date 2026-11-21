@@ -1,0 +1,2296 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>源代码管理</title>
+  <style>
+    :root {
+      color-scheme: dark;
+      --bg: var(--vscode-sideBar-background, #1a1b1d);
+      --secondary: var(--vscode-sideBarSectionHeader-background, #222427);
+      --deep: var(--vscode-editor-background, #17191a);
+      --fg: var(--vscode-foreground, #cccccc);
+      --muted: var(--vscode-descriptionForeground, #8b8d91);
+      --border: var(--vscode-widget-border, #303235);
+      --hover: var(--vscode-list-hoverBackground, #2a2d2f);
+      --active: var(--vscode-list-activeSelectionBackground, #37373d);
+      --focus: var(--vscode-focusBorder, #4c88c6);
+      --accent: var(--vscode-button-background, #3f6ea5);
+      --accent-fg: var(--vscode-button-foreground, #ffffff);
+      --input-bg: var(--vscode-input-background, #17191a);
+      --input-fg: var(--vscode-input-foreground, #cccccc);
+      --add: var(--vscode-gitDecoration-addedResourceForeground, #81b88b);
+      --delete: var(--vscode-gitDecoration-deletedResourceForeground, #e57373);
+      --modified: var(--vscode-gitDecoration-modifiedResourceForeground, #d8b56d);
+      --untracked: var(--vscode-gitDecoration-untrackedResourceForeground, #73c991);
+      --conflict: var(--vscode-gitDecoration-conflictingResourceForeground, #e57474);
+      --warning: var(--vscode-editorWarning-foreground, #d8a94f);
+      --error: var(--vscode-errorForeground, #f48771);
+    }
+
+    * {
+      box-sizing: border-box;
+    }
+
+    [hidden] {
+      display: none !important;
+    }
+
+    html,
+    body {
+      width: 100%;
+      height: 100%;
+      margin: 0;
+      overflow: hidden;
+    }
+
+    body {
+      background: var(--bg);
+      color: var(--fg);
+      font-family: var(--vscode-font-family, "Segoe UI", "Microsoft YaHei", sans-serif);
+      font-size: 12px;
+      font-weight: 400;
+      line-height: 1.65;
+    }
+
+    button,
+    input,
+    select,
+    textarea {
+      color: inherit;
+      font: inherit;
+    }
+
+    button {
+      border: 0;
+    }
+
+    button:focus-visible,
+    input:focus-visible,
+    select:focus-visible,
+    textarea:focus-visible {
+      outline: 1px solid var(--focus);
+      outline-offset: -1px;
+    }
+
+    button:disabled,
+    input:disabled,
+    select:disabled,
+    textarea:disabled {
+      cursor: default;
+      opacity: 0.45;
+    }
+
+    .icon {
+      width: 16px;
+      height: 16px;
+      flex: 0 0 16px;
+      fill: none;
+      stroke: currentColor;
+      stroke-width: 1.35;
+      stroke-linecap: round;
+      stroke-linejoin: round;
+      pointer-events: none;
+    }
+
+    .icon.fill,
+    .icon .fill {
+      fill: currentColor;
+      stroke: none;
+    }
+
+    .svg-defs {
+      position: absolute;
+      width: 0;
+      height: 0;
+      overflow: hidden;
+    }
+
+    .app {
+      display: flex;
+      flex-direction: column;
+      width: 100%;
+      height: 100%;
+      min-width: 0;
+      background: var(--bg);
+    }
+
+    .topbar {
+      display: flex;
+      align-items: center;
+      flex: 0 0 36px;
+      height: 36px;
+      min-width: 0;
+      padding: 0 4px;
+      border-bottom: 1px solid var(--border);
+      background: var(--bg);
+    }
+
+    .branch-button {
+      display: flex;
+      align-items: center;
+      gap: 4px;
+      min-width: 0;
+      height: 28px;
+      padding: 0 4px;
+      overflow: hidden;
+      border-radius: 4px;
+      background: transparent;
+      color: var(--fg);
+      cursor: pointer;
+    }
+
+    .branch-button:hover:not(:disabled) {
+      background: var(--hover);
+    }
+
+    .branch-name {
+      min-width: 0;
+      overflow: hidden;
+      text-overflow: ellipsis;
+      white-space: nowrap;
+    }
+
+    .sync-status {
+      display: flex;
+      align-items: center;
+      gap: 4px;
+      flex: none;
+      color: var(--muted);
+      font-size: 11px;
+      line-height: 1;
+    }
+
+    .sync-pair {
+      display: inline-flex;
+      align-items: center;
+      gap: 4px;
+    }
+
+    .sync-pair .icon {
+      width: 12px;
+      height: 12px;
+      flex-basis: 12px;
+    }
+
+    .toolbar {
+      display: flex;
+      align-items: center;
+      flex: none;
+      margin-left: auto;
+    }
+
+    .icon-button {
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
+      width: 24px;
+      height: 24px;
+      flex: 0 0 24px;
+      padding: 0;
+      border-radius: 4px;
+      background: transparent;
+      color: var(--muted);
+      cursor: pointer;
+    }
+
+    .icon-button:hover:not(:disabled),
+    .icon-button[aria-expanded="true"] {
+      background: var(--hover);
+      color: var(--fg);
+    }
+
+    .commit-area {
+      flex: none;
+      padding: 8px;
+      border-bottom: 1px solid var(--border);
+      background: var(--bg);
+    }
+
+    .commit-label-row {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 8px;
+      margin-bottom: 4px;
+      color: var(--muted);
+      font-size: 11px;
+    }
+
+    .shortcut {
+      flex: none;
+      opacity: 0.8;
+    }
+
+    .commit-input {
+      display: block;
+      width: 100%;
+      height: 52px;
+      min-height: 52px;
+      max-height: 120px;
+      padding: 4px 8px;
+      resize: vertical;
+      border: 1px solid var(--border);
+      border-radius: 4px;
+      background: var(--input-bg);
+      color: var(--input-fg);
+      font-size: 12px;
+      line-height: 1.65;
+    }
+
+    .commit-input::placeholder,
+    .field-input::placeholder {
+      color: var(--vscode-input-placeholderForeground, #74767a);
+    }
+
+    .commit-input:focus {
+      border-color: var(--focus);
+    }
+
+    .commit-button {
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      gap: 4px;
+      width: 100%;
+      height: 28px;
+      margin-top: 4px;
+      padding: 0 8px;
+      border-radius: 4px;
+      background: var(--accent);
+      color: var(--accent-fg);
+      cursor: pointer;
+    }
+
+    .commit-button:hover:not(:disabled) {
+      background: var(--vscode-button-hoverBackground, #527db0);
+    }
+
+    .banner {
+      display: flex;
+      align-items: flex-start;
+      gap: 8px;
+      flex: none;
+      padding: 4px 8px;
+      border-bottom: 1px solid var(--border);
+      background: var(--secondary);
+      color: var(--muted);
+      font-size: 11px;
+    }
+
+    .banner > .icon {
+      margin-top: 4px;
+    }
+
+    .banner-text {
+      min-width: 0;
+      flex: 1;
+      overflow-wrap: anywhere;
+    }
+
+    .banner.error {
+      color: var(--error);
+    }
+
+    .banner.warning,
+    .banner.offline {
+      color: var(--warning);
+    }
+
+    .banner.success {
+      color: var(--add);
+    }
+
+    .banner .icon-button {
+      margin-top: -4px;
+      margin-bottom: -4px;
+      color: currentColor;
+    }
+
+    .main {
+      position: relative;
+      flex: 1;
+      min-height: 0;
+      overflow: auto;
+      scrollbar-width: thin;
+      scrollbar-color: var(--vscode-scrollbarSlider-background, #45474a) transparent;
+    }
+
+    .main::-webkit-scrollbar,
+    .patch::-webkit-scrollbar,
+    .popup::-webkit-scrollbar {
+      width: 8px;
+      height: 8px;
+    }
+
+    .main::-webkit-scrollbar-thumb,
+    .patch::-webkit-scrollbar-thumb,
+    .popup::-webkit-scrollbar-thumb {
+      background: var(--vscode-scrollbarSlider-background, #45474a);
+    }
+
+    .center-state {
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      justify-content: center;
+      gap: 8px;
+      min-height: 160px;
+      height: 100%;
+      padding: 12px;
+      color: var(--muted);
+      text-align: center;
+    }
+
+    .center-state.compact {
+      min-height: 72px;
+      height: auto;
+    }
+
+    .center-state .icon {
+      width: 24px;
+      height: 24px;
+      flex-basis: 24px;
+    }
+
+    .state-title {
+      color: var(--fg);
+    }
+
+    .state-detail {
+      max-width: 240px;
+      overflow-wrap: anywhere;
+      font-size: 11px;
+    }
+
+    .text-button {
+      min-height: 28px;
+      padding: 4px 12px;
+      border: 1px solid var(--border);
+      border-radius: 4px;
+      background: var(--secondary);
+      color: var(--fg);
+      cursor: pointer;
+    }
+
+    .text-button:hover:not(:disabled) {
+      background: var(--hover);
+    }
+
+    .workspace {
+      min-height: 100%;
+    }
+
+    .group-header {
+      display: flex;
+      align-items: center;
+      height: 28px;
+      background: var(--secondary);
+      border-bottom: 1px solid var(--border);
+    }
+
+    .group-toggle {
+      display: flex;
+      align-items: center;
+      gap: 4px;
+      width: 100%;
+      height: 28px;
+      min-width: 0;
+      padding: 0 8px;
+      background: transparent;
+      color: var(--fg);
+      text-align: left;
+      cursor: pointer;
+    }
+
+    .group-toggle:hover {
+      background: var(--hover);
+    }
+
+    .group-toggle .icon {
+      width: 12px;
+      height: 12px;
+      flex-basis: 12px;
+      color: var(--muted);
+    }
+
+    .group-label {
+      min-width: 0;
+      flex: 1;
+      overflow: hidden;
+      text-overflow: ellipsis;
+      white-space: nowrap;
+    }
+
+    .count {
+      flex: none;
+      color: var(--muted);
+      font-size: 11px;
+    }
+
+    .file-list {
+      background: var(--bg);
+    }
+
+    .file-row {
+      position: relative;
+      display: flex;
+      align-items: center;
+      height: 24px;
+      min-width: 0;
+    }
+
+    .file-row:hover,
+    .file-row:focus-within {
+      background: var(--hover);
+    }
+
+    .file-row.selected {
+      background: var(--active);
+    }
+
+    .file-main {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      width: 100%;
+      height: 24px;
+      min-width: 0;
+      padding: 0 8px;
+      background: transparent;
+      color: var(--fg);
+      text-align: left;
+      cursor: pointer;
+    }
+
+    .file-path {
+      display: flex;
+      align-items: baseline;
+      min-width: 0;
+      flex: 1;
+      overflow: hidden;
+      white-space: nowrap;
+    }
+
+    .file-name {
+      flex: none;
+      max-width: 100%;
+      overflow: hidden;
+      text-overflow: ellipsis;
+    }
+
+    .file-dir {
+      min-width: 0;
+      margin-left: 4px;
+      overflow: hidden;
+      color: var(--muted);
+      font-size: 11px;
+      text-overflow: ellipsis;
+      white-space: nowrap;
+      direction: rtl;
+    }
+
+    .file-meta {
+      display: flex;
+      align-items: center;
+      gap: 4px;
+      flex: none;
+      font-family: var(--vscode-editor-font-family, Consolas, monospace);
+      font-size: 11px;
+    }
+
+    .status-code {
+      min-width: 12px;
+      color: var(--modified);
+      text-align: center;
+    }
+
+    .status-code.add,
+    .status-code.untracked {
+      color: var(--add);
+    }
+
+    .status-code.delete,
+    .status-code.conflict {
+      color: var(--delete);
+    }
+
+    .status-code.rename {
+      color: var(--vscode-gitDecoration-renamedResourceForeground, #73a6d8);
+    }
+
+    .stats {
+      display: inline-flex;
+      align-items: center;
+      gap: 4px;
+      font-family: var(--vscode-editor-font-family, Consolas, monospace);
+      font-size: 11px;
+      white-space: nowrap;
+    }
+
+    .stat-add {
+      color: var(--add);
+    }
+
+    .stat-delete {
+      color: var(--delete);
+    }
+
+    .binary-label {
+      color: var(--muted);
+      font-size: 11px;
+    }
+
+    .file-actions {
+      position: absolute;
+      top: 0;
+      right: 4px;
+      display: none;
+      align-items: center;
+      height: 24px;
+      padding-left: 4px;
+      background: var(--hover);
+    }
+
+    .file-row.selected .file-actions {
+      background: var(--active);
+    }
+
+    .file-row:hover .file-actions,
+    .file-row:focus-within .file-actions {
+      display: flex;
+    }
+
+    .file-row:hover .file-meta,
+    .file-row:focus-within .file-meta {
+      visibility: hidden;
+    }
+
+    .diff-panel {
+      border-bottom: 1px solid var(--border);
+      background: var(--deep);
+    }
+
+    .diff-titlebar {
+      display: flex;
+      align-items: center;
+      gap: 4px;
+      height: 28px;
+      padding: 0 4px 0 8px;
+      background: var(--secondary);
+      border-bottom: 1px solid var(--border);
+    }
+
+    .diff-title {
+      min-width: 0;
+      flex: 1;
+      overflow: hidden;
+      text-overflow: ellipsis;
+      white-space: nowrap;
+    }
+
+    .diff-content {
+      max-height: 45vh;
+      overflow: auto;
+    }
+
+    .diff-summary,
+    .diff-file-stat {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      height: 24px;
+      min-width: 0;
+      padding: 0 8px;
+      border-bottom: 1px solid var(--border);
+      color: var(--muted);
+      font-size: 11px;
+    }
+
+    .diff-summary-label,
+    .diff-file-path {
+      min-width: 0;
+      flex: 1;
+      overflow: hidden;
+      text-overflow: ellipsis;
+      white-space: nowrap;
+    }
+
+    .diff-file-stat .icon {
+      width: 12px;
+      height: 12px;
+      flex-basis: 12px;
+    }
+
+    .hunk-item {
+      border-bottom: 1px solid var(--border);
+    }
+
+    .hunk-row {
+      position: relative;
+      display: flex;
+      align-items: center;
+      height: 24px;
+      min-width: 0;
+    }
+
+    .hunk-row:hover,
+    .hunk-row:focus-within {
+      background: var(--hover);
+    }
+
+    .hunk-toggle {
+      display: flex;
+      align-items: center;
+      gap: 4px;
+      width: 100%;
+      height: 24px;
+      min-width: 0;
+      padding: 0 8px;
+      background: transparent;
+      color: var(--fg);
+      font-family: var(--vscode-editor-font-family, Consolas, monospace);
+      font-size: 11px;
+      text-align: left;
+      cursor: pointer;
+    }
+
+    .hunk-toggle > .icon {
+      width: 12px;
+      height: 12px;
+      flex-basis: 12px;
+      color: var(--muted);
+    }
+
+    .hunk-range {
+      min-width: 0;
+      flex: 1;
+      overflow: hidden;
+      text-overflow: ellipsis;
+      white-space: nowrap;
+    }
+
+    .hunk-action {
+      position: absolute;
+      top: 0;
+      right: 4px;
+      display: none;
+      background: var(--hover);
+    }
+
+    .hunk-row:hover .hunk-action,
+    .hunk-row:focus-within .hunk-action {
+      display: inline-flex;
+    }
+
+    .hunk-row:hover .stats,
+    .hunk-row:focus-within .stats {
+      visibility: hidden;
+    }
+
+    .patch {
+      max-height: 240px;
+      overflow: auto;
+      padding: 4px 0;
+      background: var(--deep);
+      color: var(--fg);
+      font-family: var(--vscode-editor-font-family, Consolas, monospace);
+      font-size: 11px;
+      line-height: 1.65;
+      tab-size: 4;
+    }
+
+    .patch-line {
+      min-width: max-content;
+      padding: 0 8px;
+      white-space: pre;
+    }
+
+    .patch-line.add {
+      background: var(--vscode-diffEditor-insertedTextBackground, rgba(80, 140, 90, 0.18));
+      color: var(--add);
+    }
+
+    .patch-line.delete {
+      background: var(--vscode-diffEditor-removedTextBackground, rgba(160, 70, 70, 0.16));
+      color: var(--delete);
+    }
+
+    .patch-line.meta {
+      color: var(--muted);
+    }
+
+    .popup {
+      position: fixed;
+      top: 36px;
+      z-index: 20;
+      max-height: 280px;
+      padding: 4px;
+      overflow: auto;
+      border: 1px solid var(--border);
+      border-radius: 4px;
+      background: var(--vscode-menu-background, #222427);
+      color: var(--vscode-menu-foreground, var(--fg));
+      box-shadow: 0 4px 12px rgba(0, 0, 0, 0.32);
+    }
+
+    #branch-menu {
+      left: 4px;
+      width: min(240px, calc(100vw - 8px));
+    }
+
+    #more-menu {
+      right: 4px;
+      width: min(196px, calc(100vw - 8px));
+    }
+
+    .menu-item {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      width: 100%;
+      height: 28px;
+      min-width: 0;
+      padding: 0 8px;
+      border-radius: 4px;
+      background: transparent;
+      color: inherit;
+      text-align: left;
+      cursor: pointer;
+    }
+
+    .menu-item:hover:not(:disabled),
+    .menu-item:focus-visible {
+      background: var(--vscode-menu-selectionBackground, #37373d);
+      color: var(--vscode-menu-selectionForeground, var(--fg));
+    }
+
+    .menu-item .icon {
+      width: 14px;
+      height: 14px;
+      flex-basis: 14px;
+      color: var(--muted);
+    }
+
+    .menu-label {
+      min-width: 0;
+      flex: 1;
+      overflow: hidden;
+      text-overflow: ellipsis;
+      white-space: nowrap;
+    }
+
+    .menu-check {
+      color: var(--add);
+      font-size: 11px;
+    }
+
+    .menu-separator {
+      height: 1px;
+      margin: 4px;
+      background: var(--vscode-menu-separatorBackground, var(--border));
+    }
+
+    .menu-empty {
+      padding: 4px 8px;
+      color: var(--muted);
+      font-size: 11px;
+    }
+
+    .prompt-layer {
+      position: fixed;
+      inset: 0;
+      z-index: 40;
+      display: flex;
+      align-items: flex-start;
+      justify-content: center;
+      padding: 12px;
+      background: rgba(0, 0, 0, 0.28);
+    }
+
+    .prompt {
+      width: 100%;
+      max-width: 320px;
+      margin-top: 12px;
+      padding: 12px;
+      border: 1px solid var(--border);
+      border-radius: 4px;
+      background: var(--vscode-editorWidget-background, #222427);
+      box-shadow: 0 8px 12px rgba(0, 0, 0, 0.36);
+    }
+
+    .prompt-title {
+      margin: 0;
+      color: var(--fg);
+      font-size: 12px;
+      font-weight: 600;
+      line-height: 1.65;
+    }
+
+    .prompt-description {
+      margin: 4px 0 0;
+      color: var(--muted);
+      font-size: 11px;
+      overflow-wrap: anywhere;
+    }
+
+    .prompt-fields {
+      display: flex;
+      flex-direction: column;
+      gap: 8px;
+      margin-top: 8px;
+    }
+
+    .field {
+      display: flex;
+      flex-direction: column;
+      gap: 4px;
+    }
+
+    .field-label {
+      color: var(--muted);
+      font-size: 11px;
+    }
+
+    .field-input {
+      width: 100%;
+      height: 28px;
+      padding: 4px 8px;
+      border: 1px solid var(--border);
+      border-radius: 4px;
+      background: var(--input-bg);
+      color: var(--input-fg);
+      font-size: 12px;
+    }
+
+    select.field-input {
+      padding: 0 4px;
+    }
+
+    .prompt-actions {
+      display: flex;
+      justify-content: flex-end;
+      gap: 8px;
+      margin-top: 12px;
+    }
+
+    .prompt-actions .text-button {
+      min-width: 64px;
+    }
+
+    .prompt-submit {
+      border-color: transparent;
+      background: var(--accent);
+      color: var(--accent-fg);
+    }
+
+    .prompt-submit.danger {
+      background: var(--vscode-inputValidation-errorBackground, #5a1d1d);
+      color: var(--error);
+    }
+
+    .sr-only {
+      position: absolute;
+      width: 1px;
+      height: 1px;
+      padding: 0;
+      overflow: hidden;
+      clip: rect(0, 0, 0, 0);
+      white-space: nowrap;
+      border: 0;
+    }
+
+    .spin {
+      animation: spin 0.9s linear infinite;
+    }
+
+    @keyframes spin {
+      to {
+        transform: rotate(360deg);
+      }
+    }
+
+    @media (prefers-reduced-motion: reduce) {
+      .spin {
+        animation: none;
+      }
+    }
+
+    @media (max-width: 280px) {
+      .sync-status {
+        display: none;
+      }
+
+      .toolbar .icon-button {
+        width: 24px;
+      }
+    }
+  </style>
+</head>
+<body>
+  <svg class="svg-defs" xmlns="http://www.w3.org/2000/svg" aria-hidden="true">
+    <defs>
+      <symbol id="i-branch" viewBox="0 0 16 16">
+        <circle cx="4" cy="3" r="1.5"></circle><circle cx="12" cy="4" r="1.5"></circle><circle cx="4" cy="13" r="1.5"></circle>
+        <path d="M4 4.5v7M12 5.5c0 3-3 2.5-4 3.5S6 11 4 11"></path>
+      </symbol>
+      <symbol id="i-refresh" viewBox="0 0 16 16">
+        <path d="M13.2 5.5A5.5 5.5 0 1 0 13 11M13.2 2.5v3.5H9.7"></path>
+      </symbol>
+      <symbol id="i-fetch" viewBox="0 0 16 16">
+        <path d="M3 9.5a4.5 4.5 0 0 1 8.7-1.7A3.2 3.2 0 0 1 12 14H4a3 3 0 0 1-1-5.8"></path>
+        <path d="M8 2v7M5.5 6.5 8 9l2.5-2.5"></path>
+      </symbol>
+      <symbol id="i-pull" viewBox="0 0 16 16">
+        <path d="M8 2v9M4.5 7.5 8 11l3.5-3.5M3 13.5h10"></path>
+      </symbol>
+      <symbol id="i-push" viewBox="0 0 16 16">
+        <path d="M8 13V4M4.5 7.5 8 4l3.5 3.5M3 2.5h10"></path>
+      </symbol>
+      <symbol id="i-more" viewBox="0 0 16 16">
+        <circle class="fill" cx="3" cy="8" r="1"></circle><circle class="fill" cx="8" cy="8" r="1"></circle><circle class="fill" cx="13" cy="8" r="1"></circle>
+      </symbol>
+      <symbol id="i-chevron-right" viewBox="0 0 16 16"><path d="m6 3 5 5-5 5"></path></symbol>
+      <symbol id="i-chevron-down" viewBox="0 0 16 16"><path d="m3 6 5 5 5-5"></path></symbol>
+      <symbol id="i-plus" viewBox="0 0 16 16"><path d="M8 3v10M3 8h10"></path></symbol>
+      <symbol id="i-minus" viewBox="0 0 16 16"><path d="M3 8h10"></path></symbol>
+      <symbol id="i-diff" viewBox="0 0 16 16">
+        <path d="M3 2.5h6l4 4v7H3zM9 2.5v4h4M5.5 9h5M8 6.5v5"></path>
+      </symbol>
+      <symbol id="i-file" viewBox="0 0 16 16"><path d="M3.5 2h5l4 4v8h-9zM8.5 2v4h4"></path></symbol>
+      <symbol id="i-check" viewBox="0 0 16 16"><path d="m3 8.5 3 3 7-7"></path></symbol>
+      <symbol id="i-close" viewBox="0 0 16 16"><path d="m4 4 8 8M12 4l-8 8"></path></symbol>
+      <symbol id="i-warning" viewBox="0 0 16 16"><path d="M8 2 14 13H2zM8 6v3M8 11.5v.5"></path></symbol>
+      <symbol id="i-info" viewBox="0 0 16 16"><circle cx="8" cy="8" r="6"></circle><path d="M8 7v4M8 4.5v.5"></path></symbol>
+      <symbol id="i-error" viewBox="0 0 16 16"><circle cx="8" cy="8" r="6"></circle><path d="m5.5 5.5 5 5M10.5 5.5l-5 5"></path></symbol>
+      <symbol id="i-folder" viewBox="0 0 16 16"><path d="M2 4h4l1.5 2H14v7H2z"></path></symbol>
+      <symbol id="i-revert" viewBox="0 0 16 16"><path d="M3 6a5.5 5.5 0 1 1 .5 5M3 2.5V6h3.5M8 5v3l2 1.5"></path></symbol>
+      <symbol id="i-remote" viewBox="0 0 16 16"><circle cx="8" cy="8" r="6"></circle><path d="M2 8h12M8 2c2 2 2 10 0 12M8 2c-2 2-2 10 0 12"></path></symbol>
+      <symbol id="i-worktree" viewBox="0 0 16 16"><path d="M2 4h4l1 1.5h4V12H2zM10 9h4M12 7v4"></path></symbol>
+      <symbol id="i-sync" viewBox="0 0 16 16"><path d="M12.5 5A5 5 0 0 0 4 3.5L2.5 5M2.5 2v3h3M3.5 11A5 5 0 0 0 12 12.5l1.5-1.5M13.5 14v-3h-3"></path></symbol>
+      <symbol id="i-arrow-down" viewBox="0 0 16 16"><path d="M8 2v11M4 9l4 4 4-4"></path></symbol>
+      <symbol id="i-arrow-up" viewBox="0 0 16 16"><path d="M8 14V3M4 7l4-4 4 4"></path></symbol>
+    </defs>
+  </svg>
+
+  <div id="app" class="app">
+    <header class="topbar">
+      <button id="branch-button" class="branch-button" type="button" title="切换分支" aria-label="切换分支" aria-haspopup="menu" aria-expanded="false" aria-controls="branch-menu">
+        <svg class="icon" aria-hidden="true"><use href="#i-branch"></use></svg>
+        <span id="branch-name" class="branch-name">正在加载</span>
+        <span id="sync-status" class="sync-status" title="远程同步状态" hidden>
+          <span class="sync-pair"><svg class="icon" aria-hidden="true"><use href="#i-arrow-down"></use></svg><span id="behind-count">0</span></span>
+          <span class="sync-pair"><svg class="icon" aria-hidden="true"><use href="#i-arrow-up"></use></svg><span id="ahead-count">0</span></span>
+        </span>
+      </button>
+      <div class="toolbar" role="toolbar" aria-label="Git 操作">
+        <button id="refresh-button" class="icon-button sync-action" type="button" title="刷新" aria-label="刷新 Git 状态" data-action="refresh" data-spinner="true">
+          <svg class="icon" aria-hidden="true"><use href="#i-refresh"></use></svg>
+        </button>
+        <button id="fetch-button" class="icon-button sync-action" type="button" title="获取 (fetch)" aria-label="从远程获取" data-action="fetch" data-requires-repo="true" data-requires-online="true" data-spinner="true">
+          <svg class="icon" aria-hidden="true"><use href="#i-fetch"></use></svg>
+        </button>
+        <button id="pull-button" class="icon-button sync-action" type="button" title="拉取 (pull)" aria-label="从远程拉取" data-action="pull" data-requires-repo="true" data-requires-online="true" data-spinner="true">
+          <svg class="icon" aria-hidden="true"><use href="#i-pull"></use></svg>
+        </button>
+        <button id="push-button" class="icon-button sync-action" type="button" title="推送 (push)" aria-label="推送到远程" data-action="push" data-requires-repo="true" data-requires-online="true" data-spinner="true">
+          <svg class="icon" aria-hidden="true"><use href="#i-push"></use></svg>
+        </button>
+        <button id="more-button" class="icon-button" type="button" title="更多操作" aria-label="更多 Git 操作" aria-haspopup="menu" aria-expanded="false" aria-controls="more-menu">
+          <svg class="icon" aria-hidden="true"><use href="#i-more"></use></svg>
+        </button>
+      </div>
+    </header>
+
+    <section class="commit-area" aria-label="提交更改">
+      <div class="commit-label-row">
+        <label for="commit-input">提交消息</label>
+        <span class="shortcut" aria-hidden="true">Ctrl+Enter</span>
+      </div>
+      <textarea id="commit-input" class="commit-input" rows="2" placeholder="输入提交消息" aria-label="提交消息，按 Control Enter 提交" spellcheck="false"></textarea>
+      <button id="commit-button" class="commit-button sync-action" type="button" data-action="commit" data-requires-repo="true" data-spinner="true">
+        <svg class="icon" aria-hidden="true"><use href="#i-check"></use></svg>
+        <span id="commit-button-label">提交</span>
+      </button>
+    </section>
+
+    <div id="offline-banner" class="banner offline" role="status" hidden>
+      <svg class="icon" aria-hidden="true"><use href="#i-warning"></use></svg>
+      <span class="banner-text">当前离线，fetch、pull 和 push 不可用。</span>
+    </div>
+
+    <div id="message-banner" class="banner" hidden>
+      <span id="message-icon"></span>
+      <span id="message-text" class="banner-text"></span>
+      <button id="message-close" class="icon-button" type="button" title="关闭消息" aria-label="关闭消息">
+        <svg class="icon" aria-hidden="true"><use href="#i-close"></use></svg>
+      </button>
+    </div>
+
+    <main id="main" class="main" aria-label="源代码管理内容">
+      <section id="loading-state" class="center-state" role="status">
+        <svg class="icon spin" aria-hidden="true"><use href="#i-refresh"></use></svg>
+        <span class="state-title">正在读取 Git 状态</span>
+        <span class="state-detail">正在等待扩展返回仓库信息…</span>
+      </section>
+
+      <section id="fatal-error" class="center-state" role="alert" hidden>
+        <svg class="icon" aria-hidden="true"><use href="#i-error"></use></svg>
+        <span class="state-title">无法读取 Git 状态</span>
+        <span id="fatal-error-text" class="state-detail"></span>
+        <button id="fatal-retry" class="text-button" type="button" data-action="refresh">重试</button>
+      </section>
+
+      <section id="no-repo-state" class="center-state" hidden>
+        <svg class="icon" aria-hidden="true"><use href="#i-folder"></use></svg>
+        <span class="state-title">未打开 Git 仓库</span>
+        <span class="state-detail">打开包含 Git 仓库的文件夹后，更改会显示在这里。</span>
+        <button id="no-repo-refresh" class="text-button" type="button" data-action="refresh">刷新</button>
+      </section>
+
+      <div id="workspace" class="workspace" hidden>
+        <section id="diff-panel" class="diff-panel" aria-label="结构化差异" hidden>
+          <div class="diff-titlebar">
+            <svg class="icon" aria-hidden="true"><use href="#i-diff"></use></svg>
+            <span id="diff-title" class="diff-title"></span>
+            <button id="diff-close" class="icon-button" type="button" title="关闭差异" aria-label="关闭差异">
+              <svg class="icon" aria-hidden="true"><use href="#i-close"></use></svg>
+            </button>
+          </div>
+          <div id="diff-content" class="diff-content"></div>
+        </section>
+
+        <div id="changes" class="changes"></div>
+
+        <section id="empty-state" class="center-state" hidden>
+          <svg class="icon" aria-hidden="true"><use href="#i-check"></use></svg>
+          <span class="state-title">没有更改</span>
+          <span class="state-detail">当前工作区是干净的。</span>
+        </section>
+      </div>
+    </main>
+  </div>
+
+  <nav id="branch-menu" class="popup" role="menu" aria-label="分支操作" hidden></nav>
+  <nav id="more-menu" class="popup" role="menu" aria-label="更多 Git 操作" hidden></nav>
+
+  <div id="prompt-layer" class="prompt-layer" hidden>
+    <section class="prompt" role="dialog" aria-modal="true" aria-labelledby="prompt-title" aria-describedby="prompt-description">
+      <h2 id="prompt-title" class="prompt-title"></h2>
+      <p id="prompt-description" class="prompt-description"></p>
+      <form id="prompt-form">
+        <div id="prompt-fields" class="prompt-fields"></div>
+        <div class="prompt-actions">
+          <button id="prompt-cancel" class="text-button" type="button">取消</button>
+          <button id="prompt-submit" class="text-button prompt-submit" type="submit">确定</button>
+        </div>
+      </form>
+    </section>
+  </div>
+
+  <div id="announcer" class="sr-only" aria-live="polite" aria-atomic="true"></div>
+
+  <script>
+    (function () {
+      'use strict';
+
+      const vscode = acquireVsCodeApi();
+      const byId = function (id) { return document.getElementById(id); };
+      const svgNS = 'http://www.w3.org/2000/svg';
+      const groupDefinitions = [
+        { id: 'staged', label: '暂存的更改', defaultCode: 'M', fileAction: 'unstage', hunkAction: 'unstageHunk' },
+        { id: 'changed', label: '更改', defaultCode: 'M', fileAction: 'stage', hunkAction: 'stageHunk' },
+        { id: 'untracked', label: '未跟踪的文件', defaultCode: 'U', fileAction: 'stage', hunkAction: 'stageHunk' },
+        { id: 'conflicts', label: '冲突', defaultCode: '!', fileAction: 'resolveConflict', hunkAction: 'stageHunk' }
+      ];
+      const remoteActions = ['fetch', 'pull', 'push'];
+      const collapsed = Object.create(null);
+      const pendingActions = Object.create(null);
+      const busyActions = Object.create(null);
+      const statsCache = Object.create(null);
+
+      let gitState = emptyState();
+      let hasGitState = false;
+      let lastError = '';
+      let notice = null;
+      let offline = !navigator.onLine;
+      let requestSequence = 0;
+      let selectedFile = null;
+      let activeMenu = null;
+      let menuOpener = null;
+      let promptConfig = null;
+      let promptReturnFocus = null;
+      let commitBaseHead = null;
+      let diffView = emptyDiff();
+
+      function emptyState() {
+        return {
+          root: '',
+          branch: '',
+          head: '',
+          staged: [],
+          changed: [],
+          untracked: [],
+          conflicts: [],
+          branches: [],
+          remotes: [],
+          worktrees: [],
+          tracking: '',
+          ahead: 0,
+          behind: 0
+        };
+      }
+
+      function emptyDiff() {
+        return {
+          requestId: '',
+          loading: false,
+          error: '',
+          result: null,
+          target: '',
+          rel: '',
+          expandedHunk: null
+        };
+      }
+
+      function element(tag, className, text) {
+        const node = document.createElement(tag);
+        if (className) { node.className = className; }
+        if (text !== undefined && text !== null) { node.textContent = String(text); }
+        return node;
+      }
+
+      function icon(name, extraClass) {
+        const svg = document.createElementNS(svgNS, 'svg');
+        const use = document.createElementNS(svgNS, 'use');
+        svg.setAttribute('class', 'icon' + (extraClass ? ' ' + extraClass : ''));
+        svg.setAttribute('aria-hidden', 'true');
+        use.setAttribute('href', '#i-' + name);
+        svg.appendChild(use);
+        return svg;
+      }
+
+      function buttonWithIcon(name, label, action) {
+        const button = element('button', 'icon-button');
+        button.type = 'button';
+        button.title = label;
+        button.setAttribute('aria-label', label);
+        if (action) {
+          button.dataset.action = action;
+          button.dataset.requiresRepo = 'true';
+        }
+        button.appendChild(icon(name));
+        return button;
+      }
+
+      function text(value, fallback) {
+        if (value === undefined || value === null || value === '') { return fallback || ''; }
+        return String(value);
+      }
+
+      function cleanPath(value) {
+        return text(value, '').replace(/\\/g, '/');
+      }
+
+      function finiteNumber(value) {
+        if (value === undefined || value === null || value === '') { return null; }
+        const number = Number(value);
+        return Number.isFinite(number) ? number : null;
+      }
+
+      function firstNumber(source, keys) {
+        if (!source || typeof source !== 'object') { return null; }
+        for (let index = 0; index < keys.length; index += 1) {
+          const value = finiteNumber(source[keys[index]]);
+          if (value !== null) { return value; }
+        }
+        return null;
+      }
+
+      function nonNegativeInteger(value) {
+        const number = finiteNumber(value);
+        return number === null ? 0 : Math.max(0, Math.floor(number));
+      }
+
+      function normalizeFile(item, defaultCode) {
+        const source = item && typeof item === 'object' ? item : {};
+        const rawPath = typeof item === 'string' ? item : (source.path || source.rel || source.file || source.new_path);
+        return Object.assign({}, source, {
+          path: cleanPath(rawPath),
+          code: text(typeof item === 'string' ? defaultCode : (source.code || source.status), defaultCode)
+        });
+      }
+
+      function normalizeFiles(value, defaultCode) {
+        if (!Array.isArray(value)) { return []; }
+        return value.map(function (item) { return normalizeFile(item, defaultCode); }).filter(function (item) {
+          return Boolean(item.path);
+        });
+      }
+
+      function normalizeState(next) {
+        const source = next && typeof next === 'object' ? next : {};
+        return Object.assign({}, source, {
+          root: text(source.root, ''),
+          branch: text(source.branch, ''),
+          head: text(source.head, ''),
+          staged: normalizeFiles(source.staged, 'M'),
+          changed: normalizeFiles(source.changed, 'M'),
+          untracked: normalizeFiles(source.untracked, 'U'),
+          conflicts: normalizeFiles(source.conflicts, '!'),
+          branches: Array.isArray(source.branches) ? source.branches : [],
+          remotes: Array.isArray(source.remotes) ? source.remotes : [],
+          worktrees: Array.isArray(source.worktrees) ? source.worktrees : [],
+          tracking: text(source.tracking, ''),
+          ahead: nonNegativeInteger(source.ahead),
+          behind: nonNegativeInteger(source.behind)
+        });
+      }
+
+      function postAction(action, payload) {
+        const message = Object.assign({ type: 'git.action' }, payload || {}, { action: action });
+        try {
+          vscode.postMessage(message);
+          return true;
+        } catch (error) {
+          lastError = error && error.message ? error.message : '无法向扩展发送 Git 请求。';
+          return false;
+        }
+      }
+
+      function isBusy(action) {
+        return Boolean(
+          pendingActions[action] || busyActions[action] ||
+          pendingActions.all || busyActions.all ||
+          pendingActions['*'] || busyActions['*']
+        );
+      }
+
+      function clearPending() {
+        Object.keys(pendingActions).forEach(function (key) { delete pendingActions[key]; });
+      }
+
+      function clearBusy() {
+        Object.keys(busyActions).forEach(function (key) { delete busyActions[key]; });
+      }
+
+      function runAction(action, payload) {
+        if (isBusy(action)) { return false; }
+        if (remoteActions.indexOf(action) !== -1 && offline) {
+          notice = { message: '当前离线，无法请求远程操作。', level: 'warning' };
+          renderMessages();
+          return false;
+        }
+        pendingActions[action] = true;
+        lastError = '';
+        notice = null;
+        if (!postAction(action, payload)) {
+          delete pendingActions[action];
+          if (action === 'commit') { commitBaseHead = null; }
+          renderAll();
+          return false;
+        }
+        renderAll();
+        return true;
+      }
+
+      function actionPayload(file, target) {
+        return {
+          root: gitState.root,
+          path: file.path,
+          rel: file.path,
+          target: target,
+          code: file.code
+        };
+      }
+
+      function announce(message) {
+        byId('announcer').textContent = message;
+      }
+
+      function showMenuItem(parent, label, iconName, action, handler, options) {
+        const settings = options || {};
+        const item = element('button', 'menu-item');
+        item.type = 'button';
+        item.setAttribute('role', 'menuitem');
+        item.title = settings.title || label;
+        item.setAttribute('aria-label', settings.title || label);
+        if (action) {
+          item.dataset.action = action;
+          item.dataset.requiresRepo = 'true';
+        }
+        if (settings.online) { item.dataset.requiresOnline = 'true'; }
+        item.appendChild(icon(iconName));
+        item.appendChild(element('span', 'menu-label', label));
+        if (settings.current) { item.appendChild(element('span', 'menu-check', '当前')); }
+        if (settings.disabled) {
+          item.dataset.enabled = 'false';
+          item.disabled = true;
+        }
+        item.addEventListener('click', function () {
+          closeMenus(false);
+          handler();
+        });
+        parent.appendChild(item);
+        return item;
+      }
+
+      function menuSeparator(parent) {
+        parent.appendChild(element('div', 'menu-separator'));
+      }
+
+      function branchName(branch) {
+        if (typeof branch === 'string') { return branch; }
+        if (!branch || typeof branch !== 'object') { return ''; }
+        return text(branch.name || branch.branch || branch.ref, '');
+      }
+
+      function openBranchMenu() {
+        if (activeMenu === byId('branch-menu')) {
+          closeMenus(true);
+          return;
+        }
+        closeMenus(false);
+        const menu = byId('branch-menu');
+        menu.textContent = '';
+        showMenuItem(menu, '创建分支…', 'plus', 'branchCreate', openBranchCreatePrompt);
+        showMenuItem(menu, '输入要切换的分支…', 'branch', 'branchSwitch', openBranchSwitchPrompt);
+        const branches = gitState.branches.map(branchName).filter(Boolean);
+        if (branches.length) {
+          menuSeparator(menu);
+          branches.forEach(function (name) {
+            const current = name === gitState.branch;
+            showMenuItem(menu, name, 'branch', 'branchSwitch', function () {
+              if (!current) {
+                runAction('branchSwitch', { root: gitState.root, branch: name });
+              }
+            }, { current: current, disabled: current, title: current ? '当前分支：' + name : '切换到 ' + name });
+          });
+        }
+        activeMenu = menu;
+        menuOpener = byId('branch-button');
+        menu.hidden = false;
+        menuOpener.setAttribute('aria-expanded', 'true');
+        focusFirstMenuItem(menu);
+        updateControls();
+      }
+
+      function openMoreMenu() {
+        if (activeMenu === byId('more-menu')) {
+          closeMenus(true);
+          return;
+        }
+        closeMenus(false);
+        const menu = byId('more-menu');
+        menu.textContent = '';
+        showMenuItem(menu, '创建分支…', 'plus', 'branchCreate', openBranchCreatePrompt);
+        showMenuItem(menu, '切换分支…', 'branch', 'branchSwitch', openBranchSwitchPrompt);
+        menuSeparator(menu);
+        showMenuItem(menu, '添加远程仓库…', 'remote', 'remoteAdd', openRemoteAddPrompt);
+        showMenuItem(menu, '添加工作树…', 'worktree', 'worktreeAdd', openWorktreeAddPrompt);
+        menuSeparator(menu);
+        showMenuItem(menu, '获取 (fetch)', 'fetch', 'fetch', function () {
+          runAction('fetch', { root: gitState.root });
+        }, { online: true });
+        showMenuItem(menu, '拉取 (pull)', 'pull', 'pull', function () {
+          runAction('pull', { root: gitState.root, branch: gitState.branch });
+        }, { online: true });
+        showMenuItem(menu, '推送 (push)', 'push', 'push', function () {
+          runAction('push', { root: gitState.root, branch: gitState.branch });
+        }, { online: true });
+        activeMenu = menu;
+        menuOpener = byId('more-button');
+        menu.hidden = false;
+        menuOpener.setAttribute('aria-expanded', 'true');
+        focusFirstMenuItem(menu);
+        updateControls();
+      }
+
+      function focusFirstMenuItem(menu) {
+        const first = menu.querySelector('.menu-item:not(:disabled)');
+        if (first) { first.focus(); }
+      }
+
+      function closeMenus(restoreFocus) {
+        [byId('branch-menu'), byId('more-menu')].forEach(function (menu) {
+          menu.hidden = true;
+        });
+        byId('branch-button').setAttribute('aria-expanded', 'false');
+        byId('more-button').setAttribute('aria-expanded', 'false');
+        if (restoreFocus && menuOpener && menuOpener.isConnected) { menuOpener.focus(); }
+        activeMenu = null;
+        menuOpener = null;
+      }
+
+      function openPrompt(config) {
+        const focused = document.activeElement;
+        const fromBranchMenu = focused && focused.closest && focused.closest('#branch-menu');
+        const fromMoreMenu = focused && focused.closest && focused.closest('#more-menu');
+        promptReturnFocus = fromBranchMenu ? byId('branch-button') : (fromMoreMenu ? byId('more-button') : focused);
+        closeMenus(false);
+        promptConfig = config;
+        byId('prompt-title').textContent = config.title;
+        byId('prompt-description').textContent = config.description || '';
+        byId('prompt-description').hidden = !config.description;
+        byId('prompt-submit').textContent = config.submitLabel || '确定';
+        byId('prompt-submit').classList.toggle('danger', Boolean(config.danger));
+        byId('prompt-submit').dataset.action = config.action;
+        byId('prompt-submit').dataset.requiresRepo = 'true';
+        const fields = byId('prompt-fields');
+        fields.textContent = '';
+        (config.fields || []).forEach(function (field, index) {
+          const wrapper = element('div', 'field');
+          const id = 'prompt-field-' + index;
+          const label = element('label', 'field-label', field.label);
+          label.htmlFor = id;
+          let input;
+          if (field.type === 'select') {
+            input = element('select', 'field-input');
+            (field.options || []).forEach(function (option) {
+              const optionNode = element('option', '', option.label || option.value);
+              optionNode.value = option.value;
+              input.appendChild(optionNode);
+            });
+          } else {
+            input = element('input', 'field-input');
+            input.type = field.type || 'text';
+            input.placeholder = field.placeholder || '';
+          }
+          input.id = id;
+          input.name = field.name;
+          input.value = field.value || '';
+          input.required = Boolean(field.required);
+          input.autocomplete = 'off';
+          input.spellcheck = false;
+          wrapper.appendChild(label);
+          wrapper.appendChild(input);
+          fields.appendChild(wrapper);
+        });
+        byId('app').inert = true;
+        byId('prompt-layer').hidden = false;
+        updateControls();
+        const firstField = fields.querySelector('input, select');
+        if (firstField) {
+          firstField.focus();
+          if (firstField.select && firstField.tagName === 'INPUT') { firstField.select(); }
+        } else if (config.danger) {
+          byId('prompt-cancel').focus();
+        } else {
+          byId('prompt-submit').focus();
+        }
+      }
+
+      function closePrompt(restoreFocus) {
+        byId('prompt-layer').hidden = true;
+        byId('prompt-fields').textContent = '';
+        byId('app').inert = false;
+        promptConfig = null;
+        if (restoreFocus !== false && promptReturnFocus && promptReturnFocus.isConnected) {
+          promptReturnFocus.focus();
+        }
+        promptReturnFocus = null;
+      }
+
+      function openBranchCreatePrompt() {
+        openPrompt({
+          title: '创建分支',
+          description: '输入新分支名称，请求将发送给 IDE。',
+          action: 'branchCreate',
+          submitLabel: '创建',
+          fields: [
+            { name: 'branch', label: '分支名称', placeholder: 'feature/new-branch', required: true },
+            { name: 'startPoint', label: '起始点（可选）', placeholder: gitState.head ? gitState.head.slice(0, 12) : 'HEAD' }
+          ],
+          submit: function (values) {
+            runAction('branchCreate', {
+              root: gitState.root,
+              branch: values.branch,
+              startPoint: values.startPoint || undefined
+            });
+          }
+        });
+      }
+
+      function openBranchSwitchPrompt() {
+        const branches = gitState.branches.map(branchName).filter(Boolean);
+        openPrompt({
+          title: '切换分支',
+          description: '选择或输入目标分支，切换结果以扩展返回的状态为准。',
+          action: 'branchSwitch',
+          submitLabel: '切换',
+          fields: [
+            branches.length ? {
+              name: 'branch', label: '目标分支', type: 'select', required: true,
+              options: branches.map(function (name) { return { value: name, label: name }; }),
+              value: gitState.branch
+            } : { name: 'branch', label: '目标分支', placeholder: 'main', required: true }
+          ],
+          submit: function (values) {
+            runAction('branchSwitch', { root: gitState.root, branch: values.branch });
+          }
+        });
+      }
+
+      function openRemoteAddPrompt() {
+        openPrompt({
+          title: '添加远程仓库',
+          description: '分别输入远程名称和 URL，请求将发送给 IDE。',
+          action: 'remoteAdd',
+          submitLabel: '添加',
+          fields: [
+            { name: 'name', label: '远程名称', value: 'origin', placeholder: 'origin', required: true },
+            { name: 'url', label: '远程 URL', placeholder: 'https://example.com/repository.git', required: true }
+          ],
+          submit: function (values) {
+            runAction('remoteAdd', {
+              root: gitState.root,
+              name: values.name,
+              remote: values.name,
+              url: values.url
+            });
+          }
+        });
+      }
+
+      function openWorktreeAddPrompt() {
+        openPrompt({
+          title: '添加工作树',
+          description: '输入工作树路径及可选分支，请求将发送给 IDE。',
+          action: 'worktreeAdd',
+          submitLabel: '添加',
+          fields: [
+            { name: 'path', label: '工作树路径', placeholder: '../repository-worktree', required: true },
+            { name: 'branch', label: '分支（可选）', placeholder: gitState.branch || 'main' }
+          ],
+          submit: function (values) {
+            runAction('worktreeAdd', {
+              root: gitState.root,
+              path: values.path,
+              branch: values.branch || undefined
+            });
+          }
+        });
+      }
+
+      function openRevertPrompt(file, target) {
+        openPrompt({
+          title: target === 'untracked' ? '放弃未跟踪文件' : '放弃更改',
+          description: '将请求 IDE 放弃“' + file.path + '”的更改，此操作可能无法撤销。',
+          action: 'revert',
+          submitLabel: '放弃',
+          danger: true,
+          fields: [],
+          submit: function () {
+            runAction('revert', actionPayload(file, target));
+          }
+        });
+      }
+
+      function submitPrompt(event) {
+        event.preventDefault();
+        if (!promptConfig || isBusy(promptConfig.action)) { return; }
+        const form = byId('prompt-form');
+        if (!form.reportValidity()) { return; }
+        const values = {};
+        const fields = byId('prompt-fields').querySelectorAll('input, select');
+        fields.forEach(function (field) {
+          values[field.name] = field.type === 'text' ? field.value.trim() : field.value;
+        });
+        const submit = promptConfig.submit;
+        closePrompt(false);
+        if (submit) { submit(values); }
+      }
+
+      function fileParts(path) {
+        const normalized = cleanPath(path);
+        const index = normalized.lastIndexOf('/');
+        return {
+          name: index === -1 ? normalized : normalized.slice(index + 1),
+          directory: index === -1 ? '' : normalized.slice(0, index)
+        };
+      }
+
+      function statusClass(code, target) {
+        if (target === 'conflicts' || code === '!') { return 'conflict'; }
+        const value = text(code, 'M').toUpperCase();
+        if (value.indexOf('D') !== -1) { return 'delete'; }
+        if (value.indexOf('R') !== -1) { return 'rename'; }
+        if (target === 'untracked' || value.indexOf('A') !== -1 || value.indexOf('?') !== -1) { return 'add'; }
+        if (target === 'untracked') { return 'untracked'; }
+        return 'modified';
+      }
+
+      function statsFor(source) {
+        if (!source || typeof source !== 'object') { return null; }
+        const nested = source.stats && typeof source.stats === 'object' ? source.stats : null;
+        const additions = firstNumber(source, ['additions', 'added', 'insertions', 'linesAdded']) ??
+          firstNumber(nested, ['additions', 'added', 'insertions', 'linesAdded']);
+        const deletions = firstNumber(source, ['deletions', 'deleted', 'removed', 'linesDeleted']) ??
+          firstNumber(nested, ['deletions', 'deleted', 'removed', 'linesDeleted']);
+        const binary = source.binary === true || (nested && nested.binary === true);
+        if (additions === null && deletions === null && !binary) { return null; }
+        return { additions: additions || 0, deletions: deletions || 0, binary: binary };
+      }
+
+      function statsForFile(file, target) {
+        return statsFor(file) || statsCache[target + '\n' + file.path] || null;
+      }
+
+      function appendStats(parent, stats) {
+        if (!stats) { return null; }
+        const wrapper = element('span', 'stats');
+        if (stats.binary) {
+          wrapper.appendChild(element('span', 'binary-label', '二进制'));
+          parent.appendChild(wrapper);
+          return wrapper;
+        }
+        wrapper.appendChild(element('span', 'stat-add', '+' + stats.additions));
+        wrapper.appendChild(element('span', 'stat-delete', '-' + stats.deletions));
+        parent.appendChild(wrapper);
+        return wrapper;
+      }
+
+      function createFileRow(file, group) {
+        const row = element('div', 'file-row');
+        row.setAttribute('role', 'listitem');
+        if (selectedFile && selectedFile.path === file.path && selectedFile.target === group.id) {
+          row.classList.add('selected');
+        }
+        const main = element('button', 'file-main');
+        main.type = 'button';
+        main.title = '查看 ' + file.path + ' 的结构化差异';
+        main.setAttribute('aria-label', group.label + '：' + file.path + '，状态 ' + file.code + '，打开差异');
+        main.dataset.action = 'openDiff';
+        main.dataset.requiresRepo = 'true';
+        main.dataset.diffPath = file.path;
+        main.dataset.diffTarget = group.id;
+        main.addEventListener('click', function () { requestDiff(file, group); });
+
+        const path = element('span', 'file-path');
+        const parts = fileParts(file.path);
+        path.appendChild(element('span', 'file-name', parts.name));
+        if (parts.directory) { path.appendChild(element('span', 'file-dir', parts.directory)); }
+        main.appendChild(path);
+
+        const meta = element('span', 'file-meta');
+        appendStats(meta, statsForFile(file, group.id));
+        meta.appendChild(element('span', 'status-code ' + statusClass(file.code, group.id), file.code || group.defaultCode));
+        main.appendChild(meta);
+        row.appendChild(main);
+
+        const actions = element('span', 'file-actions');
+        const primaryLabel = group.fileAction === 'unstage' ? '取消暂存' : (group.fileAction === 'resolveConflict' ? '标记为已解决' : '暂存');
+        const primaryIcon = group.fileAction === 'unstage' ? 'minus' : (group.fileAction === 'resolveConflict' ? 'check' : 'plus');
+        const primary = buttonWithIcon(primaryIcon, primaryLabel + '：' + file.path, group.fileAction);
+        primary.addEventListener('click', function () {
+          runAction(group.fileAction, actionPayload(file, group.id));
+        });
+        actions.appendChild(primary);
+
+        const open = buttonWithIcon('diff', '在编辑器中打开原生差异：' + file.path, 'openNativeDiff');
+        open.addEventListener('click', function () {
+          postAction('openNativeDiff', actionPayload(file, group.id));
+        });
+        actions.appendChild(open);
+
+        if (group.id === 'changed' || group.id === 'untracked') {
+          const revert = buttonWithIcon('revert', '放弃更改：' + file.path, 'revert');
+          revert.addEventListener('click', function () { openRevertPrompt(file, group.id); });
+          actions.appendChild(revert);
+        }
+        row.appendChild(actions);
+        return row;
+      }
+
+      function renderGroups() {
+        const container = byId('changes');
+        container.textContent = '';
+        let total = 0;
+        groupDefinitions.forEach(function (group) {
+          const files = gitState[group.id] || [];
+          if (!files.length) { return; }
+          total += files.length;
+          const section = element('section', 'file-group');
+          const headingId = 'group-' + group.id;
+          section.setAttribute('aria-labelledby', headingId);
+          const header = element('div', 'group-header');
+          const toggle = element('button', 'group-toggle');
+          toggle.type = 'button';
+          toggle.setAttribute('aria-expanded', collapsed[group.id] ? 'false' : 'true');
+          toggle.setAttribute('aria-controls', 'files-' + group.id);
+          toggle.title = (collapsed[group.id] ? '展开' : '折叠') + group.label;
+          toggle.appendChild(icon(collapsed[group.id] ? 'chevron-right' : 'chevron-down'));
+          toggle.appendChild(element('span', 'group-label', group.label));
+          const label = toggle.querySelector('.group-label');
+          label.id = headingId;
+          toggle.appendChild(element('span', 'count', files.length));
+          toggle.addEventListener('click', function () {
+            collapsed[group.id] = !collapsed[group.id];
+            renderGroups();
+            updateControls();
+            const restored = container.querySelector('[aria-controls="files-' + group.id + '"]');
+            if (restored) { restored.focus(); }
+          });
+          header.appendChild(toggle);
+          section.appendChild(header);
+          const list = element('div', 'file-list');
+          list.id = 'files-' + group.id;
+          list.setAttribute('role', 'list');
+          list.hidden = Boolean(collapsed[group.id]);
+          files.forEach(function (file) { list.appendChild(createFileRow(file, group)); });
+          section.appendChild(list);
+          container.appendChild(section);
+        });
+        byId('empty-state').hidden = total !== 0;
+      }
+
+      function parseDiffStats(diff) {
+        let additions = 0;
+        let deletions = 0;
+        text(diff, '').split(/\r?\n/).forEach(function (line) {
+          if (line.indexOf('+++') === 0 || line.indexOf('---') === 0) { return; }
+          if (line.charAt(0) === '+') { additions += 1; }
+          if (line.charAt(0) === '-') { deletions += 1; }
+        });
+        return { additions: additions, deletions: deletions, binary: false };
+      }
+
+      function normalizeDiffFiles(value, rel, diff) {
+        let files = [];
+        if (Array.isArray(value)) {
+          files = value.slice();
+        } else if (value && typeof value === 'object') {
+          const looksLikeFile = value.path || value.rel || value.file || value.new_path || statsFor(value);
+          if (looksLikeFile) {
+            files = [value];
+          } else {
+            Object.keys(value).forEach(function (key) {
+              const entry = value[key];
+              if (entry && typeof entry === 'object') {
+                files.push(Object.assign({ path: key }, entry));
+              }
+            });
+          }
+        }
+        if (!files.length && (rel || diff)) { files = [{ path: rel }]; }
+        const overall = parseDiffStats(diff);
+        return files.map(function (item, index) {
+          const source = item && typeof item === 'object' ? item : { path: item };
+          const path = cleanPath(source.path || source.rel || source.file || source.new_path || rel);
+          const stats = statsFor(source) || (files.length === 1 && index === 0 ? overall : null);
+          return Object.assign({}, source, { path: path, computedStats: stats });
+        });
+      }
+
+      function normalizeHunks(value) {
+        if (!Array.isArray(value)) { return []; }
+        return value.map(function (item, index) {
+          const source = item && typeof item === 'object' ? item : { patch: text(item, '') };
+          return Object.assign({}, source, {
+            id: source.id !== undefined && source.id !== null ? source.id : 'hunk-' + index,
+            file: cleanPath(source.file || source.path || source.rel || diffView.rel),
+            old_range: text(source.old_range || source.oldRange, ''),
+            new_range: text(source.new_range || source.newRange, ''),
+            patch: text(source.patch, ''),
+            head_sha: text(source.head_sha || source.headSha, ''),
+            index_sha: text(source.index_sha || source.indexSha, '')
+          });
+        });
+      }
+
+      function normalizeDiffResult(result) {
+        const source = typeof result === 'string' ? { diff: result } : (result && typeof result === 'object' ? result : {});
+        const diff = text(source.diff, '');
+        return Object.assign({}, source, {
+          diff: diff,
+          files: normalizeDiffFiles(source.files, diffView.rel, diff),
+          hunks: normalizeHunks(source.hunks)
+        });
+      }
+
+      function requestDiff(file, group) {
+        if (isBusy('openDiff')) { return; }
+        requestSequence += 1;
+        const requestId = 'diff-' + Date.now().toString(36) + '-' + requestSequence;
+        selectedFile = { path: file.path, target: group.id, code: file.code };
+        diffView = emptyDiff();
+        diffView.requestId = requestId;
+        diffView.loading = true;
+        diffView.target = group.id;
+        diffView.rel = file.path;
+        lastError = '';
+        renderAll();
+        const payload = actionPayload(file, group.id);
+        payload.requestId = requestId;
+        payload.mode = 'inline';
+        if (!postAction('openDiff', payload)) {
+          diffView.loading = false;
+          diffView.error = lastError || '差异请求发送失败。';
+          renderAll();
+        }
+      }
+
+      function retryDiff() {
+        if (!selectedFile) { return; }
+        const group = groupDefinitions.find(function (item) { return item.id === selectedFile.target; });
+        if (group) { requestDiff({ path: selectedFile.path, code: selectedFile.code }, group); }
+      }
+
+      function closeDiff() {
+        selectedFile = null;
+        diffView = emptyDiff();
+        renderGroups();
+        renderDiff();
+        updateControls();
+      }
+
+      function hunkRange(hunk) {
+        if (hunk.header) { return text(hunk.header, ''); }
+        return '@@ -' + (hunk.old_range || '0,0') + ' +' + (hunk.new_range || '0,0') + ' @@';
+      }
+
+      function createPatch(patch, id) {
+        const container = element('div', 'patch');
+        container.id = id;
+        container.setAttribute('role', 'region');
+        container.setAttribute('aria-label', '差异补丁');
+        text(patch, '').split(/\r?\n/).forEach(function (line) {
+          let className = 'patch-line';
+          if (line.indexOf('+++') === 0 || line.indexOf('---') === 0 || line.indexOf('@@') === 0 || line.indexOf('diff ') === 0 || line.indexOf('index ') === 0) {
+            className += ' meta';
+          } else if (line.charAt(0) === '+') {
+            className += ' add';
+          } else if (line.charAt(0) === '-') {
+            className += ' delete';
+          }
+          container.appendChild(element('div', className, line));
+        });
+        return container;
+      }
+
+      function hunkActionPayload(hunk) {
+        return {
+          root: gitState.root,
+          id: hunk.id,
+          file: hunk.file || diffView.rel,
+          rel: hunk.file || diffView.rel,
+          path: hunk.file || diffView.rel,
+          target: diffView.target,
+          old_range: hunk.old_range,
+          new_range: hunk.new_range,
+          patch: hunk.patch,
+          head_sha: hunk.head_sha,
+          index_sha: hunk.index_sha
+        };
+      }
+
+      function createHunk(hunk, index, action) {
+        const key = String(hunk.id);
+        const item = element('div', 'hunk-item');
+        const row = element('div', 'hunk-row');
+        const patchId = 'hunk-patch-' + requestSequence + '-' + index;
+        const expanded = diffView.expandedHunk === key;
+        const toggle = element('button', 'hunk-toggle');
+        toggle.type = 'button';
+        toggle.title = expanded ? '收起补丁' : '展开补丁';
+        toggle.setAttribute('aria-label', hunkRange(hunk) + '，' + toggle.title);
+        toggle.setAttribute('aria-expanded', expanded ? 'true' : 'false');
+        toggle.setAttribute('aria-controls', patchId);
+        toggle.dataset.hunkKey = key;
+        toggle.appendChild(icon(expanded ? 'chevron-down' : 'chevron-right'));
+        toggle.appendChild(element('span', 'hunk-range', hunkRange(hunk)));
+        const hunkStats = statsFor(hunk) || parseDiffStats(hunk.patch);
+        appendStats(toggle, hunkStats);
+        toggle.addEventListener('click', function () {
+          diffView.expandedHunk = expanded ? null : key;
+          renderDiff();
+          const toggles = byId('diff-content').querySelectorAll('.hunk-toggle');
+          toggles.forEach(function (candidate) {
+            if (candidate.dataset.hunkKey === key) { candidate.focus(); }
+          });
+        });
+        row.appendChild(toggle);
+        const actionLabel = action === 'unstageHunk' ? '取消暂存此代码块' : '暂存此代码块';
+        const stage = buttonWithIcon(action === 'unstageHunk' ? 'minus' : 'plus', actionLabel, action);
+        stage.classList.add('hunk-action');
+        stage.addEventListener('click', function () {
+          runAction(action, hunkActionPayload(hunk));
+        });
+        row.appendChild(stage);
+        item.appendChild(row);
+        const patch = createPatch(hunk.patch, patchId);
+        patch.hidden = !expanded;
+        item.appendChild(patch);
+        return item;
+      }
+
+      function renderDiff() {
+        const panel = byId('diff-panel');
+        const content = byId('diff-content');
+        panel.hidden = !selectedFile;
+        content.textContent = '';
+        if (!selectedFile) { return; }
+        byId('diff-title').textContent = diffView.rel;
+        byId('diff-title').title = diffView.rel;
+        content.setAttribute('aria-busy', diffView.loading ? 'true' : 'false');
+        if (diffView.loading) {
+          const loading = element('div', 'center-state compact', '正在加载结构化差异…');
+          loading.setAttribute('role', 'status');
+          loading.prepend(icon('refresh', 'spin'));
+          content.appendChild(loading);
+          return;
+        }
+        if (diffView.error) {
+          const error = element('div', 'center-state compact');
+          error.setAttribute('role', 'alert');
+          error.appendChild(icon('error'));
+          error.appendChild(element('span', 'state-title', '无法加载差异'));
+          error.appendChild(element('span', 'state-detail', diffView.error));
+          const retry = element('button', 'text-button', '重试');
+          retry.type = 'button';
+          retry.dataset.action = 'openDiff';
+          retry.dataset.requiresRepo = 'true';
+          retry.addEventListener('click', retryDiff);
+          error.appendChild(retry);
+          content.appendChild(error);
+          return;
+        }
+        if (!diffView.result) { return; }
+        const result = diffView.result;
+        const summary = element('div', 'diff-summary');
+        summary.appendChild(element('span', 'diff-summary-label', result.files.length + ' 个文件'));
+        const totalStats = result.files.reduce(function (total, file) {
+          const stats = file.computedStats;
+          if (stats) {
+            total.additions += stats.additions;
+            total.deletions += stats.deletions;
+            total.binary = total.binary || stats.binary;
+          }
+          return total;
+        }, { additions: 0, deletions: 0, binary: false });
+        appendStats(summary, totalStats);
+        content.appendChild(summary);
+
+        result.files.forEach(function (file) {
+          const row = element('div', 'diff-file-stat');
+          row.title = file.path;
+          row.appendChild(icon('file'));
+          row.appendChild(element('span', 'diff-file-path', file.path || diffView.rel));
+          appendStats(row, file.computedStats);
+          content.appendChild(row);
+        });
+
+        if (result.hunks.length) {
+          const group = groupDefinitions.find(function (item) { return item.id === diffView.target; });
+          const action = group ? group.hunkAction : 'stageHunk';
+          const list = element('div', 'hunk-list');
+          list.setAttribute('aria-label', '差异代码块');
+          result.hunks.forEach(function (hunk, index) {
+            list.appendChild(createHunk(hunk, index, action));
+          });
+          content.appendChild(list);
+        } else if (result.diff) {
+          content.appendChild(createPatch(result.diff, 'raw-diff'));
+        } else {
+          const empty = element('div', 'center-state compact', '没有可显示的文本差异。');
+          empty.appendChild(element('span', 'state-detail', '文件可能为二进制文件，或差异已经发生变化。'));
+          content.appendChild(empty);
+        }
+      }
+
+      function renderHeader() {
+        const branch = hasGitState && gitState.root ? (gitState.branch || '分离 HEAD') : (hasGitState ? '无仓库' : '正在加载');
+        byId('branch-name').textContent = branch;
+        const head = gitState.head ? ' · ' + gitState.head.slice(0, 12) : '';
+        const root = gitState.root ? '\n' + gitState.root : '';
+        byId('branch-button').title = branch + head + root;
+        byId('branch-button').setAttribute('aria-label', '当前分支 ' + branch + '，切换分支');
+        byId('sync-status').hidden = !hasGitState || !gitState.root || !gitState.branch || !gitState.tracking;
+        byId('ahead-count').textContent = gitState.ahead;
+        byId('behind-count').textContent = gitState.behind;
+        byId('sync-status').title = '落后远程 ' + gitState.behind + ' 个提交，领先远程 ' + gitState.ahead + ' 个提交';
+        const commitButton = byId('commit-button');
+        commitButton.title = gitState.branch ? '提交到 ' + gitState.branch + ' (Ctrl+Enter)' : '提交 (Ctrl+Enter)';
+      }
+
+      function renderStates() {
+        const loading = !hasGitState && !lastError;
+        const fatal = !hasGitState && Boolean(lastError);
+        const noRepo = hasGitState && !gitState.root;
+        const workspace = hasGitState && Boolean(gitState.root);
+        byId('loading-state').hidden = !loading;
+        byId('fatal-error').hidden = !fatal;
+        byId('no-repo-state').hidden = !noRepo;
+        byId('workspace').hidden = !workspace;
+        byId('fatal-error-text').textContent = lastError;
+        byId('main').setAttribute('aria-busy', loading ? 'true' : 'false');
+      }
+
+      function renderMessages() {
+        const offlineBanner = byId('offline-banner');
+        offlineBanner.hidden = !offline;
+        const banner = byId('message-banner');
+        const current = lastError && hasGitState ? { message: lastError, level: 'error' } : notice;
+        banner.hidden = !current;
+        if (!current) { return; }
+        const level = ['error', 'warning', 'success', 'info'].indexOf(current.level) === -1 ? 'info' : current.level;
+        banner.className = 'banner ' + level;
+        banner.setAttribute('role', level === 'error' ? 'alert' : 'status');
+        byId('message-text').textContent = current.message;
+        const iconHost = byId('message-icon');
+        iconHost.textContent = '';
+        iconHost.appendChild(icon(level === 'error' ? 'error' : (level === 'warning' ? 'warning' : (level === 'success' ? 'check' : 'info'))));
+      }
+
+      function updateControls() {
+        const repoReady = hasGitState && Boolean(gitState.root);
+        const buttons = document.querySelectorAll('button[data-action]');
+        buttons.forEach(function (button) {
+          const action = button.dataset.action;
+          let disabled = isBusy(action);
+          if (button.dataset.requiresRepo === 'true' && !repoReady) { disabled = true; }
+          if (button.dataset.requiresOnline === 'true' && offline) { disabled = true; }
+          if (action === 'commit' && !byId('commit-input').value.trim()) { disabled = true; }
+          if (button.dataset.enabled === 'false') { disabled = true; }
+          const diffLoading = action === 'openDiff' && diffView.loading &&
+            button.dataset.diffPath === diffView.rel && button.dataset.diffTarget === diffView.target;
+          if (diffLoading) { disabled = true; }
+          button.disabled = disabled;
+          const spinning = button.dataset.spinner === 'true' && isBusy(action);
+          button.classList.toggle('is-busy', spinning);
+          button.setAttribute('aria-busy', spinning || diffLoading ? 'true' : 'false');
+          const svg = button.querySelector('.icon');
+          if (svg && button.dataset.spinner === 'true') { svg.classList.toggle('spin', spinning); }
+        });
+        byId('branch-button').disabled = !repoReady || isBusy('branchSwitch');
+        byId('more-button').disabled = !repoReady;
+        byId('commit-input').disabled = !repoReady || isBusy('commit');
+        byId('commit-button-label').textContent = isBusy('commit') ? '正在提交…' : '提交';
+      }
+
+      function renderAll() {
+        renderHeader();
+        renderStates();
+        renderGroups();
+        renderDiff();
+        renderMessages();
+        updateControls();
+      }
+
+      function receiveState(message) {
+        const previousHead = gitState.head;
+        const previousRoot = gitState.root;
+        gitState = normalizeState(message.state);
+        hasGitState = true;
+        offline = Boolean(!navigator.onLine || message.state && (message.state.offline === true || message.state.online === false));
+        if (previousRoot !== gitState.root) {
+          selectedFile = null;
+          diffView = emptyDiff();
+          Object.keys(statsCache).forEach(function (key) { delete statsCache[key]; });
+        }
+        clearPending();
+        lastError = '';
+        // 只有 HEAD 前进才清空提交输入，失败或普通刷新不会丢失用户消息。
+        if (commitBaseHead !== null && gitState.head && gitState.head !== previousHead && gitState.head !== commitBaseHead) {
+          byId('commit-input').value = '';
+          commitBaseHead = null;
+        } else if (commitBaseHead !== null && !isBusy('commit')) {
+          commitBaseHead = null;
+        }
+        renderAll();
+      }
+
+      function receiveDiff(message) {
+        if (!diffView.requestId || message.requestId !== diffView.requestId) { return; }
+        diffView.loading = false;
+        diffView.target = text(message.target, diffView.target);
+        diffView.rel = cleanPath(message.rel || diffView.rel);
+        if (message.result && message.result.error) {
+          diffView.error = text(message.result.error, '无法读取差异。');
+          diffView.result = null;
+        } else {
+          diffView.error = '';
+          diffView.result = normalizeDiffResult(message.result);
+          diffView.result.files.forEach(function (file) {
+            if (file.path && file.computedStats) {
+              statsCache[diffView.target + '\n' + file.path] = file.computedStats;
+            }
+          });
+        }
+        renderGroups();
+        renderDiff();
+        updateControls();
+        announce(diffView.error ? '差异加载失败' : '已加载 ' + diffView.rel + ' 的结构化差异');
+      }
+
+      function receiveBusy(message) {
+        const action = text(message.action, '');
+        if (!action) { return; }
+        if (message.busy) {
+          busyActions[action] = true;
+        } else {
+          delete busyActions[action];
+          delete pendingActions[action];
+        }
+        updateControls();
+      }
+
+      function receiveError(message) {
+        lastError = text(message.message, 'Git 操作失败。');
+        notice = null;
+        clearPending();
+        clearBusy();
+        commitBaseHead = null;
+        if (diffView.loading) {
+          diffView.loading = false;
+          diffView.error = lastError;
+        }
+        renderAll();
+      }
+
+      function receiveNotice(message) {
+        notice = {
+          message: text(message.message, ''),
+          level: text(message.level, 'info')
+        };
+        renderMessages();
+        announce(notice.message);
+      }
+
+      byId('branch-button').addEventListener('click', openBranchMenu);
+      byId('more-button').addEventListener('click', openMoreMenu);
+      byId('refresh-button').addEventListener('click', function () {
+        runAction('refresh', { root: gitState.root || undefined });
+      });
+      byId('fetch-button').addEventListener('click', function () {
+        runAction('fetch', { root: gitState.root });
+      });
+      byId('pull-button').addEventListener('click', function () {
+        runAction('pull', { root: gitState.root, branch: gitState.branch });
+      });
+      byId('push-button').addEventListener('click', function () {
+        runAction('push', { root: gitState.root, branch: gitState.branch });
+      });
+      byId('fatal-retry').addEventListener('click', function () {
+        runAction('refresh', { root: gitState.root || undefined });
+      });
+      byId('no-repo-refresh').addEventListener('click', function () {
+        runAction('refresh', {});
+      });
+      byId('commit-button').addEventListener('click', function () {
+        const message = byId('commit-input').value.trim();
+        if (!message || !gitState.root || isBusy('commit')) { return; }
+        commitBaseHead = gitState.head || '';
+        runAction('commit', {
+          root: gitState.root,
+          branch: gitState.branch,
+          message: message
+        });
+      });
+      byId('commit-input').addEventListener('input', updateControls);
+      byId('commit-input').addEventListener('keydown', function (event) {
+        if (event.key === 'Enter' && (event.ctrlKey || event.metaKey)) {
+          event.preventDefault();
+          if (!byId('commit-button').disabled) { byId('commit-button').click(); }
+        }
+      });
+      byId('message-close').addEventListener('click', function () {
+        lastError = '';
+        notice = null;
+        renderMessages();
+        renderStates();
+      });
+      byId('diff-close').addEventListener('click', closeDiff);
+      byId('prompt-form').addEventListener('submit', submitPrompt);
+      byId('prompt-cancel').addEventListener('click', function () { closePrompt(true); });
+      byId('prompt-layer').addEventListener('click', function (event) {
+        if (event.target === byId('prompt-layer')) { closePrompt(true); }
+      });
+
+      document.addEventListener('click', function (event) {
+        if (!activeMenu) { return; }
+        if (activeMenu.contains(event.target) || (menuOpener && menuOpener.contains(event.target))) { return; }
+        closeMenus(false);
+      });
+
+      document.addEventListener('keydown', function (event) {
+        if (!byId('prompt-layer').hidden) {
+          if (event.key === 'Escape') {
+            event.preventDefault();
+            closePrompt(true);
+            return;
+          }
+          if (event.key === 'Tab') {
+            const focusable = byId('prompt-layer').querySelectorAll('input:not(:disabled), select:not(:disabled), button:not(:disabled)');
+            if (!focusable.length) { return; }
+            const first = focusable[0];
+            const last = focusable[focusable.length - 1];
+            if (event.shiftKey && document.activeElement === first) {
+              event.preventDefault();
+              last.focus();
+            } else if (!event.shiftKey && document.activeElement === last) {
+              event.preventDefault();
+              first.focus();
+            }
+          }
+          return;
+        }
+        if (event.key === 'Escape' && activeMenu) {
+          event.preventDefault();
+          closeMenus(true);
+          return;
+        }
+        if (activeMenu && (event.key === 'ArrowDown' || event.key === 'ArrowUp' || event.key === 'Home' || event.key === 'End')) {
+          const items = Array.from(activeMenu.querySelectorAll('.menu-item:not(:disabled)'));
+          if (!items.length) { return; }
+          event.preventDefault();
+          let index = items.indexOf(document.activeElement);
+          if (event.key === 'Home') {
+            index = 0;
+          } else if (event.key === 'End') {
+            index = items.length - 1;
+          } else if (event.key === 'ArrowDown') {
+            index = (index + 1 + items.length) % items.length;
+          } else {
+            index = (index - 1 + items.length) % items.length;
+          }
+          items[index].focus();
+        }
+      });
+
+      window.addEventListener('offline', function () {
+        offline = true;
+        renderMessages();
+        updateControls();
+      });
+
+      window.addEventListener('online', function () {
+        offline = Boolean(gitState.offline || gitState.online === false);
+        renderMessages();
+        updateControls();
+        runAction('refresh', { root: gitState.root || undefined });
+      });
+
+      window.addEventListener('message', function (event) {
+        const message = event.data;
+        if (!message || typeof message !== 'object') { return; }
+        if (message.type === 'git.state') {
+          receiveState(message);
+        } else if (message.type === 'git.diff') {
+          receiveDiff(message);
+        } else if (message.type === 'git.error') {
+          receiveError(message);
+        } else if (message.type === 'git.busy') {
+          receiveBusy(message);
+        } else if (message.type === 'git.notice') {
+          receiveNotice(message);
+        }
+      });
+
+      renderAll();
+      runAction('refresh', {});
+    }());
+  </script>
+</body>
+</html>

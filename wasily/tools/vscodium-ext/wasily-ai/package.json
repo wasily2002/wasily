@@ -1,0 +1,267 @@
+{
+  "name": "wasily-ai",
+  "displayName": "Wasily AI",
+  "description": "在 VSCodium 中使用本地 Wasily AI 服务：聊天、解释、加注释、修 Bug、写测试与内联补全。",
+  "version": "0.5.0",
+  "publisher": "wasily",
+  "license": "MIT",
+  "engines": {
+    "vscode": "^1.85.0"
+  },
+  "main": "./extension.js",
+  "activationEvents": [
+    "onStartupFinished"
+  ],
+  "contributes": {
+    "commands": [
+      {
+        "command": "wasily-ai.openPanel",
+        "title": "打开 Wasily AI 面板",
+        "category": "Wasily AI",
+        "icon": "resources/icon.svg"
+      },
+      {
+        "command": "wasily-ai.newSession",
+        "title": "新建会话",
+        "category": "Wasily AI",
+        "icon": "resources/icon-new.svg"
+      },
+      {
+        "command": "wasily-ai.toggleHistory",
+        "title": "历史会话",
+        "category": "Wasily AI",
+        "icon": "resources/icon-history.svg"
+      },
+      {
+        "command": "wasily-ai.openScm",
+        "title": "本地变更（源代码管理）",
+        "category": "Wasily AI",
+        "icon": "resources/icon-scm.svg"
+      },
+      {
+        "command": "wasily-ai.togglePorts",
+        "title": "端口自动转发",
+        "category": "Wasily AI",
+        "icon": "resources/icon-ports.svg"
+      },
+      {
+        "command": "wasily-ai.openAgent",
+        "title": "Agent 中心",
+        "category": "Wasily AI",
+        "icon": "resources/icon-agent.svg"
+      },
+      {
+        "command": "wasily-ai.openGroup",
+        "title": "多 AI 圆桌",
+        "category": "Wasily AI",
+        "icon": "resources/icon-group.svg"
+      },
+      {
+        "command": "wasily-ai.selfCheck",
+        "title": "AI 自检：审阅员检查上一条回答",
+        "category": "Wasily AI",
+        "icon": "resources/icon-self.svg"
+      },
+      {
+        "command": "wasily-ai.checkForUpdates",
+        "title": "检查更新（含网络诊断与镜像加速）",
+        "category": "Wasily AI"
+      },
+      {
+        "command": "wasily-ai.askAboutSelection",
+        "title": "询问选中的代码",
+        "category": "Wasily AI"
+      },
+      {
+        "command": "wasily-ai.editCurrentFile",
+        "title": "修改当前文件（diff 确认后应用）",
+        "category": "Wasily AI"
+      },
+      {
+        "command": "wasily-ai.insertAtCursor",
+        "title": "在光标处生成并插入代码",
+        "category": "Wasily AI"
+      },
+      {
+        "command": "wasily-ai.explainSelection",
+        "title": "解释选中代码",
+        "category": "Wasily AI"
+      },
+      {
+        "command": "wasily-ai.addComments",
+        "title": "为选中代码加注释",
+        "category": "Wasily AI"
+      },
+      {
+        "command": "wasily-ai.fixBug",
+        "title": "修复选中代码的 Bug",
+        "category": "Wasily AI"
+      },
+      {
+        "command": "wasily-ai.genTests",
+        "title": "为选中代码生成测试",
+        "category": "Wasily AI"
+      },
+      {
+        "command": "wasily-ai.preview",
+        "title": "预览 wasily 应用（中央 simple browser）",
+        "category": "Wasily AI",
+        "icon": "resources/icon.svg"
+      },
+      {
+        "command": "wasily-ai.showPorts",
+        "title": "端口自动转发（底部面板）",
+        "category": "Wasily AI"
+      },
+      {
+        "command": "wasily-ai.openSettings",
+        "title": "打开 wasily 设置中心",
+        "category": "Wasily AI",
+        "icon": "$(gear)"
+      },
+      {
+        "command": "wasily-ai.openChangelog",
+        "title": "更新日志",
+        "category": "Wasily AI"
+      },
+      {
+        "command": "wasily-ai.addToChat",
+        "title": "添加到对话",
+        "category": "Wasily AI"
+      },
+      {
+        "command": "wasily-ai.addSelectionToChat",
+        "title": "添加到对话",
+        "category": "Wasily AI"
+      },
+      {
+        "command": "wasily.quickfix",
+        "title": "🤖 AI Quick Fix：修复当前文件的 Problems",
+        "category": "Wasily AI"
+      },
+      {
+        "command": "wasily.buildFix",
+        "title": "🔨 Build 自动修复：运行构建并让 AI 自动修复错误",
+        "category": "Wasily AI"
+      },
+      {
+        "command": "wasily.aiTerminal",
+        "title": "💻 打开 AI Terminal（终端里直接对话）",
+        "category": "Wasily AI"
+      },
+      {
+        "command": "wasily.showGraph",
+        "title": "🗺 Codebase Graph（代码库拓扑可视化）",
+        "category": "Wasily AI"
+      }
+    ],
+    "viewsContainers": {
+      "secondarySidebar": [
+        {
+          "id": "wasilyAiBar",
+          "title": "",
+          "icon": "resources/icon.svg"
+        }
+      ]
+    },
+    "views": {
+      "wasilyAiBar": [
+        {
+          "type": "webview",
+          "id": "wasily-ai.panelView",
+          "name": ""
+        }
+      ]
+    },
+    "configuration": {
+      "title": "Wasily AI",
+      "properties": {
+        "wasily-ai.serverUrl": {
+          "type": "string",
+          "default": "http://127.0.0.1:8000",
+          "description": "本地 Wasily AI 服务地址（OpenAI 兼容接口）"
+        },
+        "wasily-ai.inlineSuggest.enabled": {
+          "type": "boolean",
+          "default": true,
+          "description": "启用 Wasily AI 内联代码补全（Tab 键采纳）"
+        },
+        "wasily-ai.inlineSuggest.debounceMs": {
+          "type": "number",
+          "default": 800,
+          "description": "内联补全防抖间隔（毫秒），两次请求间隔小于该值时跳过"
+        },
+        "wasily-ai.autoCommit.enabled": {
+          "type": "boolean",
+          "default": false,
+          "description": "启用 Save 后自动 git commit（AI 生成 message 并 QuickPick 确认）"
+        },
+        "wasily-ai.autoCommit.debounceMs": {
+          "type": "number",
+          "default": 2000,
+          "description": "Save 到自动 commit 之间的防抖等待时间（毫秒）"
+        },
+        "wasily-ai.defaultModel": {
+          "type": "string",
+          "default": "local",
+          "description": "默认使用的模型 ID（对应后端 config.json models 列表）"
+        },
+        "wasily-ai.taskNotify.system": {
+          "type": "boolean",
+          "default": true,
+          "description": "任务结束（完成/失败/需要确认）时弹 Windows 系统通知；关闭后只保留 IDE 窗口内 toast 与任务栏闪烁"
+        }
+      }
+    },
+    "menus": {
+      "editor/title": [
+        {
+          "command": "wasily-ai.openPanel",
+          "group": "navigation",
+          "when": "editorIsOpen"
+        },
+        {
+          "command": "wasily-ai.preview",
+          "group": "navigation",
+          "when": "editorIsOpen"
+        }
+      ],
+      "commandPalette": [
+        {
+          "command": "wasily-ai.openPanel",
+          "when": "true"
+        }
+      ],
+      "explorer/context": [
+        {
+          "command": "wasily-ai.addToChat",
+          "group": "navigation@9"
+        }
+      ],
+      "editor/context": [
+        {
+          "command": "wasily-ai.addSelectionToChat",
+          "group": "1_wasily@1",
+          "when": "editorTextFocus"
+        }
+      ]
+    },
+    "keybindings": [
+      {
+        "command": "wasily-ai.openPanel",
+        "key": "ctrl+alt+a",
+        "mac": "cmd+alt+a"
+      },
+      {
+        "command": "wasily-ai.openSettings",
+        "key": "ctrl+alt+,",
+        "mac": "cmd+alt+,"
+      }
+    ]
+  },
+  "capabilities": {
+    "untrustedWorkspaces": {
+      "supported": true
+    }
+  }
+}

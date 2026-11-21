@@ -1,0 +1,140 @@
+/* ============================================================
+   wasily 任务提示面板（task_hint）—— 独立样式层
+   设计变量与 chat 主界面完全一致，z-index 独立分层，不污染宿主
+   ============================================================ */
+#thPanel {
+  position: absolute;
+  left: 16px;
+  right: 16px;
+  bottom: 100%;
+  margin-bottom: 6px;
+  z-index: 200;                 /* 低于 toast(250)/minPill(300)，高于普通浮层 */
+  background: #252526;
+  border: 1px solid #3c3c3c;
+  border-radius: 8px;
+  box-shadow: 0 10px 28px rgba(0,0,0,0.55);
+  overflow: hidden;
+  display: none;
+  flex-direction: column;
+  max-height: 280px;
+  animation: thFadeIn 0.12s ease-out;
+  transform-origin: bottom center;
+}
+#thPanel.th-show { display: flex; }
+#thPanel.th-empty { display: none; }
+@keyframes thFadeIn {
+  from { opacity: 0; transform: translateY(6px) scale(0.99); }
+  to   { opacity: 1; transform: translateY(0) scale(1); }
+}
+
+/* 头部：与 Trae 一致的来源/计数行 */
+#thPanel .th-head {
+  display: flex; align-items: center; gap: 6px;
+  padding: 7px 12px;
+  font-size: 10.5px; color: #6a6a6a;
+  border-bottom: 1px solid #2d2d30;
+  letter-spacing: 0.5px; user-select: none; flex-shrink: 0;
+}
+#thPanel .th-head .th-head-ico { color: #3fb950; display: inline-flex; }
+#thPanel .th-head .th-src { color: #858585; }
+#thPanel .th-head .th-count { margin-left: auto; }
+#thPanel .th-head kbd {
+  font: 10px Consolas, monospace; color: #6a6a6a;
+  border: 1px solid #3c3c3c; border-radius: 3px; padding: 0 4px;
+}
+
+/* 选项列表 */
+#thPanel .th-list { overflow-y: auto; overscroll-behavior: contain; }
+#thPanel .th-item {
+  display: flex; align-items: flex-start; gap: 10px;
+  padding: 9px 12px; cursor: pointer;
+  border-left: 2px solid transparent;
+  transition: background 0.08s ease;
+}
+#thPanel .th-item + .th-item { border-top: 1px solid rgba(60,60,60,0.35); }
+#thPanel .th-item.th-active {
+  background: #2d2d30;
+  border-left-color: #3fb950;
+}
+#thPanel .th-ico {
+  flex: none; width: 22px; height: 22px; margin-top: 1px;
+  display: inline-flex; align-items: center; justify-content: center;
+  border-radius: 6px;
+  background: #1b1b1c; border: 1px solid #3c3c3c;
+  color: #3fb950; font-size: 13px;
+}
+#thPanel .th-item.th-active .th-ico {
+  background: rgba(63,185,80,0.14); border-color: #3fb950;
+}
+#thPanel .th-txt { min-width: 0; flex: 1; }
+#thPanel .th-title {
+  font-size: 13px; color: #cccccc; line-height: 1.35;
+  white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
+}
+#thPanel .th-item.th-active .th-title { color: #ffffff; }
+#thPanel .th-title b { color: #3fb950; font-weight: 600; }
+#thPanel .th-desc {
+  font-size: 11px; color: #6a6a6a; line-height: 1.4; margin-top: 2px;
+  white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
+}
+#thPanel .th-tag {
+  flex: none; margin-top: 2px;
+  font-size: 10px; color: #d29922;
+  border: 1px solid rgba(210,153,34,0.4); border-radius: 10px;
+  padding: 1px 7px; white-space: nowrap;
+}
+#thPanel .th-tag.tool { color: #3fb950; border-color: rgba(63,185,80,0.4); }
+#thPanel .th-tag.install { color: #58a6ff; border-color: rgba(88,166,255,0.4); }
+
+/* 加载微指示（服务端富化中） */
+#thPanel .th-loading {
+  padding: 6px 12px; font-size: 10.5px; color: #6a6a6a;
+  display: none; align-items: center; gap: 6px; flex-shrink: 0;
+}
+#thPanel.th-loading .th-loading { display: flex; }
+#thPanel .th-spinner {
+  width: 10px; height: 10px; border-radius: 50%;
+  border: 1.5px solid #3c3c3c; border-top-color: #3fb950;
+  animation: thSpin 0.7s linear infinite;
+}
+@keyframes thSpin { to { transform: rotate(360deg); } }
+
+/* 任务状态条（思考中 / 任务已完成 —— 参考 Trae 折叠条） */
+#taskStrip {
+  display: none; align-items: center; gap: 8px;
+  margin: 0 16px 8px;
+  padding: 7px 12px;
+  background: #252526; border: 1px solid #3c3c3c; border-radius: 8px;
+  font-size: 12.5px; color: #cccccc; cursor: pointer;
+  user-select: none; flex-shrink: 0;
+}
+#taskStrip.show { display: flex; }
+#taskStrip:hover { border-color: rgba(63,185,80,0.5); }
+#taskStrip .ts-ico { display: inline-flex; color: #3fb950; }
+#taskStrip.busy .ts-ico { color: #58a6ff; }
+#taskStrip .ts-spinner {
+  width: 13px; height: 13px; border-radius: 50%;
+  border: 2px solid #3c3c3c; border-top-color: #58a6ff;
+  animation: thSpin 0.7s linear infinite;
+}
+#taskStrip .ts-chevron {
+  margin-left: auto; color: #6a6a6a; display: inline-flex;
+  transition: transform 0.2s;
+}
+#taskStrip.expanded .ts-chevron { transform: rotate(180deg); }
+#taskStrip .ts-detail {
+  display: none; flex-basis: 100%;
+  font-size: 11.5px; color: #858585; line-height: 1.6;
+  padding-top: 6px; border-top: 1px solid #2d2d30; margin-top: 2px;
+}
+#taskStrip.expanded .ts-detail { display: block; }
+#taskStrip .ts-detail .ts-step { padding: 2px 0; }
+#taskStrip .ts-detail .ts-step .ts-dot { color: #3fb950; margin-right: 6px; }
+
+/* 小屏收敛 */
+@media (max-width: 480px) {
+  #thPanel { left: 8px; right: 8px; max-height: 240px; }
+  #thPanel .th-item { padding: 10px 12px; }
+  #thPanel .th-desc { display: none; }
+  #taskStrip { margin-left: 8px; margin-right: 8px; }
+}
